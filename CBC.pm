@@ -4,7 +4,7 @@ use Digest::MD5 'md5';
 use Carp;
 use strict;
 use vars qw($VERSION);
-$VERSION = '2.08';
+$VERSION = '2.09';
 
 sub new {
     my $class = shift;
@@ -273,20 +273,16 @@ sub _oneandzeroes_padding ($$$) {
 }
 
 sub get_initialization_vector (\$) {
-	my $self = shift;
-	return $self->{'iv'};
+  my $self = shift;
+  return $self->{'iv'};
 }
 
 sub set_initialization_vector (\$$) {
-	my $self = shift;
-	my $iv = shift;
+  my $self = shift;
+  my $iv = shift;
 	
-	croak "Initialization vector must be 8 bytes" unless (length($iv) == 8);
-	
-	if (exists($self->{'iv'})) {
-		carp "Initialization vector already set.  Re-setting is not recommended. (doing it anyways)";
-	}
-	$self->{'iv'} = $iv;
+  croak "Initialization vector must be 8 bytes" unless (length($iv) == 8);
+  $self->{'iv'} = $iv;
 }
 
 1;
