@@ -53,7 +53,7 @@ test(3,$j = Crypt::Rijndael->new('a' x 16, Crypt::Rijndael->MODE_CBC),
                            "Couldn't create new object");
 test(4,$j->set_iv('f' x 16));
 
-test(5,$i->encrypt($test_data) == $j->encrypt($test_data),"Encrypt doesn't match");
+test(5,$i->encrypt($test_data) eq $j->encrypt($test_data),"Encrypt doesn't match");
 
 test(6,$i->decrypt($i->encrypt($test_data)) eq $j->decrypt($j->encrypt($test_data)),"Decrypt doesn't match");
 
