@@ -39,6 +39,7 @@ sub new {
     $cipher =~ s/^Crypt::// unless $cipher->can('keysize');
 
     my $iv = $options->{iv};
+    croak "Initialization vector must be 8 bytes" unless (length($iv) == 8);
 
     my $ks = eval {$cipher->keysize};
     my $bs = eval {$cipher->blocksize};
@@ -364,16 +365,18 @@ Crypt::DES_EDE3, Crypt::IDEA, Crypt::Blowfish, and Crypt::Rijndael. You
 may refer to them using their full names ("Crypt::IDEA") or in 
 abbreviated form ("IDEA").  
 
-An initialization vector may be specified, either by passing in a key of
-'iv' as an option to new, or by calling 
-$cipher->set_initialization_key($iv) before calling $cipher->start().  
-The IV will be ignored in decryption if the ciphertext is prepended by 
-text which matches the regex /^RandomIV.{8}/, in which case the 8 
-characters following "RandomIV" will be used as the IV. When encrypting,
-by default the ciphertext will be prepended with "RandomIVE<lt>IVE<gt>"
-(16 bytes). To disable this, set 'prepend_iv' to a false value. The 
-padding method can be specified by the 'padding' option. If no padding 
-method is specified, PKCS#5 ("standard") padding is assumed.
+An initialization vector may be specified, either by passing in a key
+of 'iv' as an option to new, or by calling
+$cipher->set_initialization_key($iv) before calling $cipher->start().
+The initialization vector must be exactly 8 bytes in length.  The IV
+will be ignored in decryption if the ciphertext is prepended by text
+which matches the regex /^RandomIV.{8}/, in which case the 8
+characters following "RandomIV" will be used as the IV. When
+encrypting, by default the ciphertext will be prepended with
+"RandomIVE<lt>IVE<gt>" (16 bytes). To disable this, set 'prepend_iv'
+to a false value. The padding method can be specified by the 'padding'
+option. If no padding method is specified, PKCS#5 ("standard") padding
+is assumed.
 
 Instead of the default cipher-block-chaining mode a modified algorithm
 PCBC can be used. It provides better error propagation characteristics
