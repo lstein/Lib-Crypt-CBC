@@ -210,7 +210,7 @@ sub crypt (\$$){
 sub finish (\$) {
     my $self = shift;
     my $bs = $self->{'blocksize'};
-    my $block = $self->{'buffer'};
+    my $block = $self->{'buffer'} || '';
 
     $self->{civ} ||= '';
 
@@ -236,6 +236,7 @@ sub finish (\$) {
 
 sub _standard_padding ($$$) {
   my ($b,$bs,$decrypt) = @_;
+  $b ||= '';
   if ($decrypt eq 'd') {
      substr($b, -unpack("C",substr($b,-1)))='';
      return $b;
@@ -246,6 +247,7 @@ sub _standard_padding ($$$) {
 
 sub _space_padding ($$$) {
   my ($b,$bs,$decrypt) = @_;
+  $b ||= '';
   if ($decrypt eq 'd') {
      $b=~ s/ *$//s;
      return $b;
@@ -255,6 +257,7 @@ sub _space_padding ($$$) {
 
 sub _null_padding ($$$) {
   my ($b,$bs,$decrypt) = @_;
+  $b ||= '';
   if ($decrypt eq 'd') {
      $b=~ s/\0*$//s;
      return $b;
@@ -264,6 +267,7 @@ sub _null_padding ($$$) {
 
 sub _oneandzeroes_padding ($$$) {
   my ($b,$bs,$decrypt) = @_;
+  $b ||= '';
   if ($decrypt eq 'd') {
      my $hex = unpack("H*", $b);
      $hex =~ s/80*$//s;

@@ -1,4 +1,7 @@
 Revision history for Perl extension Crypt::CBC.
+2.09	Thu May 27 11:18:06 EDT 2004
+	-Quenched uninitialized variable warnings
+
 2.08	Wed Sep 11 08:12:49 EDT 2002
 	-Bug fix from Chris Laas to fix custom padding
 
