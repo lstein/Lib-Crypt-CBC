@@ -6,4 +6,3 @@ README
 eg/des.pl
 eg/idea.pl
 t/Rijndael.t
-t/func.t
