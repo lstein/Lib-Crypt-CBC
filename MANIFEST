@@ -5,4 +5,5 @@ Makefile.PL
 README
 eg/des.pl
 eg/idea.pl
-t/Rijndael.t
+t/Rijndael_compat.t
+t/func.t
