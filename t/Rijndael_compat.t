@@ -7,8 +7,7 @@ my ($i, $j, $test_data);
 
 eval "use Crypt::Rijndael";
 if ($@) {
-    warn "Crypt::Rijndael not installed\n";
-    print "1..0\n";
+    print "1..0 # Skipped: Crypt::Rijndael not installed\n";
     exit;
 }
 

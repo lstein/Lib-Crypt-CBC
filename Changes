@@ -1,4 +1,8 @@
 Revision history for Perl extension Crypt::CBC.
+2.11	Thu Jun  3 12:07:33 EDT 2004
+	-Fixed bug reported by Joshua Brown that caused certain length
+	strings to not encrypt properly if ending in a "0" character.
+
 2.10	Sat May 29 13:10:05 EDT 2004
 	-Fixed Rijndael compat problems
 

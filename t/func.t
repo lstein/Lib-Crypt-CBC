@@ -16,17 +16,11 @@ my (@mods,@pads,@in,$pad,$test_data,$mod,$tnum,$c,$i,$p);
 @pads = qw/standard oneandzeroes space null/;
 
 for $mod (@mods) {
-   eval "use Crypt::$mod()";
-   if ($@) {
-      warn "$mod not installed\n";
-   } else {
-      push @in, $mod;
-   }
+   eval "use Crypt::$mod(); 1" && push @in,$mod;
 }
 
 unless ($#in > -1) {
-   warn "no modules found\n";
-   print "1..0\n";
+   print "1..0 # Skipped: no cryptographic modules found\n";
    exit;
 }
 

@@ -4,8 +4,7 @@ use lib '..','../blib/lib','.','./blib/lib';
 
 eval "use Crypt::DES()";
 if ($@) {
-    warn "Crypt::DES not installed\n";
-    print "1..0\n";
+    print "1..0 # Skipped: Crypt::DES not installed\n";
     exit;
 }
 

@@ -4,8 +4,7 @@ use lib '..','../blib/lib','.','./blib/lib';
 
 eval "use Crypt::IDEA()";
 if ($@) {
-    warn "Crypt::IDEA not installed\n";
-    print "1..0\n";
+    print "1..0 # Skipped: Crypt::IDEA not installed\n";
     exit;
 }
 

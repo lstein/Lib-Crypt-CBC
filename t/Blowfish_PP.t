@@ -4,8 +4,7 @@ use lib '..','../blib/lib','.','./blib/lib';
 
 eval "use Crypt::Blowfish_PP()";
 if ($@) {
-    warn "Crypt::Blowfish_PP not installed\n";
-    print "1..0\n";
+    print "1..0 # Skipped: Crypt::Blowfish_PP not installed\n";
     exit;
 }
 
