@@ -304,7 +304,8 @@ Crypt::CBC - Encrypt Data with Cipher Block Chaining Mode
                               'iv'              => '$KJh#(}q',
                               'regenerate_key'  => 0,   # default true
                               'padding'         => 'space',
-                              'prepend_iv'      => 0
+                              'prepend_iv'      => 0,
+			      'pcbc'            => 1  #default 0
                            });
   
   $ciphertext = $cipher->encrypt("This data is hush hush");
@@ -370,6 +371,12 @@ by default the ciphertext will be prepended with "RandomIVE<lt>IVE<gt>"
 (16 bytes). To disable this, set 'prepend_iv' to a false value. The 
 padding method can be specified by the 'padding' option. If no padding 
 method is specified, PKCS#5 ("standard") padding is assumed.
+
+Instead of the default cipher-block-chaining mode a modified algorithm
+PCBC can be used. It provides better error propagation characteristics
+than CBC encryption. To switch it on you have to set 'pcbc' to a true value.
+The PCBC mode is part of the des library and required e.g. in Kerberos4
+authentication procedures as mentioned in RFC 2222 and other documents.
 
 =head2 start()
 
