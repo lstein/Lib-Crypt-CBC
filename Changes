@@ -1,4 +1,7 @@
 Revision history for Perl extension Crypt::CBC.
+2.08	Wed Sep 11 08:12:49 EDT 2002
+	-Bug fix from Chris Laas to fix custom padding
+
 2.07	Thu Aug  8 14:44:52 EDT 2002
 	-Bug fixes from Stephen Waters to fix space padding
 	-Lots of regression tests from Stephen Waters

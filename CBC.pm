@@ -49,7 +49,7 @@ sub new {
     if ($padding && ref($padding) eq 'CODE') {
       # check to see that this code does its padding correctly
       for my $i (1..$bs-1) {
-	my $rbs = length($padding->(" "x$i,$bs,0));
+	my $rbs = length($padding->(" "x$i,$bs,'e'));
 	croak "padding method callback does not behave properly: expected $bs bytes back, got $rbs bytes back." unless ($rbs == $bs);
       }
     } elsif ($padding eq 'null') {
