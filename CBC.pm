@@ -209,14 +209,14 @@ sub crypt (\$$){
 # this is called at the end to flush whatever's left
 sub finish (\$) {
     my $self = shift;
-    my $bs = $self->{'blocksize'};
+    my $bs    = $self->{'blocksize'};
     my $block = $self->{'buffer'} || '';
 
     $self->{civ} ||= '';
 
     my $result;
     if ($self->{'decrypt'}) { #decrypting
-	$block = pack("a$bs",$block); # pad and truncate to block size
+	$block = length $block ? pack("a$bs",$block) : ''; # pad and truncate to block size
 	
 	if (length($block)) {
 	  $result = $self->{'civ'} ^ $self->{'crypt'}->decrypt($block);
@@ -226,8 +226,8 @@ sub finish (\$) {
 	}
 
     } else { # encrypting
-      $block = $self->{'padding'}->($block,$bs,'e');
-      $result = $self->{'crypt'}->encrypt($self->{'civ'} ^ $block);
+      $block  = $self->{'padding'}->($block,$bs,'e') || '';
+      $result = length $block ? $self->{'crypt'}->encrypt($self->{'civ'} ^ $block) : '';
     }
     delete $self->{'civ'};
     delete $self->{'buffer'};
@@ -247,6 +247,7 @@ sub _standard_padding ($$$) {
 
 sub _space_padding ($$$) {
   my ($b,$bs,$decrypt) = @_;
+  return unless length $b;
   $b ||= '';
   if ($decrypt eq 'd') {
      $b=~ s/ *$//s;
@@ -257,6 +258,7 @@ sub _space_padding ($$$) {
 
 sub _null_padding ($$$) {
   my ($b,$bs,$decrypt) = @_;
+  return unless length $b;
   $b ||= '';
   if ($decrypt eq 'd') {
      $b=~ s/\0*$//s;
@@ -267,6 +269,7 @@ sub _null_padding ($$$) {
 
 sub _oneandzeroes_padding ($$$) {
   my ($b,$bs,$decrypt) = @_;
+  return unless length $b;
   $b ||= '';
   if ($decrypt eq 'd') {
      my $hex = unpack("H*", $b);

@@ -60,7 +60,7 @@ That lamb would dig a hole.
 END
     ;
 
-      test(\$tnum,$i = Crypt::CBC->new({key => 'secret', 
+      test(\$tnum,$i = Crypt::CBC->new({key => 'secret',
                                         cipher => $mod,
                                         padding => $pad
                                       }),
@@ -74,9 +74,9 @@ END
 # iteration 3 ends in ' ' so 'space should fail
 
       for ($c=1;$c<=7;$c++) {
-         
+
          substr($test_data,-$c) = '';
-                                       
+
          if ($c == 3 && $pad eq 'space') {
             test(\$tnum,$i->decrypt($i->encrypt($test_data)) ne $test_data);
          } else {
@@ -94,7 +94,7 @@ END
 # 'space' should fail. others should succeed.
 
       $test_data = "This string ends in some spaces  ";
-      
+
       if ($pad eq 'space') { 
          test(\$tnum,$i->decrypt($i->encrypt($test_data)) ne $test_data);
       } else {

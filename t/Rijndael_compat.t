@@ -12,7 +12,7 @@ if ($@) {
     exit;
 }
 
-print "1..32\n";
+print "1..59\n";
 
 sub test {
     local($^W) = 0;
@@ -53,20 +53,34 @@ test(3,$j = Crypt::Rijndael->new('a' x 16, Crypt::Rijndael->MODE_CBC),
                            "Couldn't create new object");
 test(4,$j->set_iv('f' x 16));
 
-test(5,$i->encrypt($test_data) eq $j->encrypt($test_data),"Encrypt doesn't match");
+test(5,$i->decrypt($i->encrypt($test_data)) eq $j->decrypt($j->encrypt($test_data)),"Decrypt doesn't match");
 
-test(6,$i->decrypt($i->encrypt($test_data)) eq $j->decrypt($j->encrypt($test_data)),"Decrypt doesn't match");
+test(6,$i->decrypt($j->encrypt($test_data)) eq $test_data,"Crypt::CBC can't decrypt Rijndael encryption");
+
+test(7,$j->decrypt($i->encrypt($test_data)) eq $test_data,"Rijndael can't decrypt Crypt::CBC encryption");
 
 # now try various truncations of the whole
+my $t = $test_data;
 for (my $c=1;$c<=7;$c++) {
-  substr($test_data,-$c) = '';  # truncate
-  test(6+$c,$i->decrypt($i->encrypt($test_data)) eq &pad($j->decrypt($j->encrypt(&pad($test_data,'e'))),'d'),"Decrypt doesn't match" );
+  substr($t,-$c) = '';  # truncate
+  test(7+$c,$t eq pad($i->decrypt($j->encrypt(pad($t,'e'))),'d'),"Crypt::CBC can't decrypt Rijndael encryption");
 }
 
+$t = $test_data;
+for (my $c=1;$c<=7;$c++) {
+  substr($t,-$c) = '';  # truncate
+  test(14+$c,$t eq pad($j->decrypt($i->encrypt(pad($t,'e'))),'d'),"Rijndael can't decrypt Crypt::CBC encryption");
+}
 
 # now try various short strings
 for (my $c=0;$c<=18;$c++) {
-  $test_data = 'i' x $c;
-  test(14+$c,$i->decrypt($i->encrypt($test_data)) eq &pad($j->decrypt($j->encrypt(&pad($test_data,'e'))),'d'),"Decrypt doesn't match" );
+  my $t = 'i' x $c;
+  test(22+$c,$t eq pad($j->decrypt($i->encrypt(pad($t,'e'))),'d'),"Rijndael can't decrypt Crypt::CBC encryption");
+}
+
+# now try various short strings
+for (my $c=0;$c<=18;$c++) {
+  my $t = 'i' x $c;
+  test(41+$c,$t eq pad($j->decrypt($i->encrypt(pad($t,'e'))),'d'),"Rijndael can't decrypt Crypt::CBC encryption");
 }
 

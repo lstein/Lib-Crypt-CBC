@@ -1,4 +1,7 @@
 Revision history for Perl extension Crypt::CBC.
+2.10	Sat May 29 13:10:05 EDT 2004
+	-Fixed Rijndael compat problems
+
 2.09	Thu May 27 11:18:06 EDT 2004
 	-Quenched uninitialized variable warnings
 
