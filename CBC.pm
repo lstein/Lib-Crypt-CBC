@@ -536,6 +536,9 @@ Please report them.
 
 Lincoln Stein, lstein@cshl.org
 
+This module is distributed under the ARTISTIC LICENSE using the same
+terms as Perl itself.
+
 =head1 SEE ALSO
 
 perl(1), Crypt::DES(3), Crypt::IDEA(3)
