@@ -4,7 +4,7 @@ use Digest::MD5 'md5';
 use Carp;
 use strict;
 use vars qw($VERSION);
-$VERSION = '2.11';
+$VERSION = '2.12';
 
 sub new {
     my $class = shift;
@@ -210,7 +210,7 @@ sub crypt (\$$){
 sub finish (\$) {
     my $self = shift;
     my $bs    = $self->{'blocksize'};
-    my $block = length $self->{'buffer'} ? $self->{'buffer'} : '';
+    my $block = defined $self->{'buffer'} ? $self->{'buffer'} : '';
 
     $self->{civ} ||= '';
 

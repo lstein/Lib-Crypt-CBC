@@ -1,4 +1,7 @@
 Revision history for Perl extension Crypt::CBC.
+2.12	Thu Jun 17 11:52:04 EDT 2004
+	- quenched (again) uninitialized variable warnings
+
 2.11	Thu Jun  3 12:07:33 EDT 2004
 	-Fixed bug reported by Joshua Brown that caused certain length
 	strings to not encrypt properly if ending in a "0" character.
