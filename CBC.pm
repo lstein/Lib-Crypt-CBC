@@ -92,11 +92,16 @@ sub new {
        ? $options->{'prepend_iv'} 
        : 1;
 
+    my $pcbc = exists $options->{'pcbc'} 
+       ? $options->{'pcbc'} 
+       : 0;
+
     return bless {'crypt'     => $cipher->new($key),
 		  'iv'        => $iv,
 		  'padding'   => $padding,
 		  'blocksize' => $bs,
                   'prepend_iv' => $prepend_iv,
+                  'pcbc'      => $pcbc,
 		  },$class;
 }
 
@@ -190,11 +195,12 @@ sub crypt (\$$){
 
     foreach my $block (@blocks) {
       if ($d) { # decrypting
-	$result .= $iv ^ $self->{'crypt'}->decrypt($block);
-	$iv = $block;
+	$result .= $iv = $iv ^ $self->{'crypt'}->decrypt($block);
+	$iv = $block unless $self->{pcbc};
       } else { # encrypting
 	$result .= $iv = $self->{'crypt'}->encrypt($iv ^ $block);
       }
+      $iv = $iv ^ $block if $self->{pcbc};
     }
     $self->{'civ'} = $iv;	        # remember the iv
     return $result;
