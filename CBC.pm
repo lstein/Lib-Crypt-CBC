@@ -4,32 +4,32 @@ use Digest::MD5 'md5';
 use Carp;
 use strict;
 use vars qw($VERSION);
-$VERSION = '2.01';
+$VERSION = '2.02';
 
 sub new {
     my $class = shift;
     my $arg1 = shift;
     my $arg2 = shift;
-    
+
     my $options = {};
-    
+
     if (ref($arg1) eq 'HASH') {
 	$options = $arg1;
     } else {
 	$options->{key} = $arg1;
     }
-    
+
     if ($arg2) {
 	$options->{cipher} = $arg2;
     }
-    
+
     my $key = $options->{key};
     croak "Please provide an encryption/decryption key" unless defined $key;
-    
+
     # get key from key?
     my $gkfk = 1;
     $gkfk = $options->{regenerate_key} if (exists($options->{regenerate_key}));
-    
+
     my $cipher = $options->{cipher};
     $cipher = 'Crypt::DES' unless $cipher;
     $cipher = $cipher=~/^Crypt::/ ? $cipher : "Crypt::$cipher";
@@ -37,59 +37,61 @@ sub new {
     croak "Couldn't load $cipher: $@" if $@;
     # some crypt modules use the class Crypt::, and others don't
     $cipher =~ s/^Crypt::// unless $cipher->can('keysize');
-    
+
     my $iv = $options->{iv};
-    
-    my $ks = $cipher->keysize;
-    my $bs = $cipher->blocksize;
-    
+
+    my $ks = eval {$cipher->keysize};
+    my $bs = eval {$cipher->blocksize};
+
     my $padding = $options->{padding};
-    
-    $padding = 'null' unless ($padding);
-    
-    if (ref($padding) eq 'CODE') {
-	# check to see that this code does it's padding correctly
-	for my $i (1..$bs-1) {
-		my $rbs = length(&{$padding}(" "x$i));
-		croak "padding method callback does not behave properly: expected $bs bytes back, got $rbs bytes back." unless ($rbs == $bs);
-	}
+    $padding ||= \&_standard_padding;
+
+    if ($padding && ref($padding) eq 'CODE') {
+      # check to see that this code does its padding correctly
+      for my $i (1..$bs-1) {
+	my $rbs = length($padding->(" "x$i,$bs,0));
+	croak "padding method callback does not behave properly: expected $bs bytes back, got $rbs bytes back." unless ($rbs == $bs);
+      }
     } elsif ($padding eq 'null') {
-	$padding = \&_null_padding;
+      $padding = \&_null_padding;
     } elsif ($padding eq 'space') {
-	$padding = \&_space_padding;
+      $padding = \&_space_padding;
     } elsif ($padding eq 'oneandzeroes') {
-	$padding = \&_oneandzeroes_padding;
+      $padding = \&_oneandzeroes_padding;
+    } elsif ($padding eq 'standard') {
+      $padding = \&_standard_padding;
     } else {
-	croak "padding method $padding not supported.  Please create your own sub to do it, and pass in a coderef to that";
+      croak "padding method $padding not supported.  Please create your own sub to do it, and pass in a coderef to that";
     }
-    
+
     # Some of the cipher modules are busted and don't report the
     # keysize (well, Crypt::Blowfish in any case).  If we detect
     # this, and find the blowfish module in use, then assume 56.
     # Otherwise assume the least common denominator of 8.
-    $ks = $cipher =~ /blowfish/i ? 56 : 8 unless $ks > 0;
-    
+    $ks ||= $cipher =~ /blowfish/i ? 56 : 8;
+    $bs ||= $ks;
+
     if (length($key) > $ks) {
 	carp "keysize is greater than allowed keysize of $ks for cipher $cipher - using only first $ks bytes";
 	$key = substr($key, 0, $ks);
     }
-    
+
     if ($gkfk) {
-	# generate the keysize from the
-	# MD5 hash of the provided key.
-	my $material = md5($key);
-	# if that's not enough, keep adding to it
-	while (length($material) < $ks)  {
-		$material .= md5($material);
-	}
+      # generate the keysize from the
+      # MD5 hash of the provided key.
+      my $material = md5($key);
+      # if that's not enough, keep adding to it
+      while (length($material) < $ks)  {
+	$material .= md5($material);
+      }
 	
-	$key = substr($material,0,$ks);
+      $key = substr($material,0,$ks);
     }
 
     my $prepend_iv = exists $options->{'prepend_iv'} 
        ? $options->{'prepend_iv'} 
        : 1;
-    
+
     return bless {'crypt'     => $cipher->new($key),
 		  'iv'        => $iv,
 		  'padding'   => $padding,
@@ -130,11 +132,11 @@ sub start (\$$) {
     my $operation = shift;
     croak "Specify <e>ncryption or <d>ecryption" 
 	unless $operation=~/^[ed]/i;
-    
+
     unless (defined($self->{'iv'})) {
     	$self->{'iv'} = pack("C*",map {rand(256)} 1..8);
     }
-    
+
     $self->{'buffer'} = '';
     $self->{'decrypt'} = $operation=~/^d/i;
 }
@@ -145,12 +147,12 @@ sub crypt (\$$){
     my $data = shift;
     croak "crypt() called without a preceding start()"
       unless exists $self->{'buffer'};
-    
+
     my $d = $self->{'decrypt'};
-    
+
     my $iv;
     my $result = '';
-    
+
     if ( !$self->{'civ'} ) {
 	if ($d) { # decrypting
 		if (($iv) = $data=~ /^RandomIV(.{8})/s) {
@@ -165,35 +167,35 @@ sub crypt (\$$){
 	}
 	$self->{'civ'} = $self->{'iv'};
     }
-    
+
     $iv = $self->{'civ'};
-    
+
     $self->{'buffer'} .= $data;
 
      my $bs = $self->{'blocksize'};
-     
+
      return $result unless (length($self->{'buffer'}) >= $bs);
-     
-     # split into blocksize chunks
-     # used to be:
-     # my @blocks = $self->{'buffer'}=~/(.{1,$bs})/ogs;
-     # but this is a little faster (about 1.5 times)
-     my @blocks = unpack("a$bs "x(int(length($self->{'buffer'})/$bs)) . "a*", $self->{'buffer'});
+
+    # split into blocksize chunks
+    # used to be:
+    # my @blocks = $self->{'buffer'}=~/(.{1,$bs})/ogs;
+    # but this is a little faster (about 1.5 times)
+    my @blocks = unpack("a$bs "x(int(length($self->{'buffer'})/$bs)) . "a*", $self->{'buffer'});
     $self->{'buffer'} = '';
 
-   if ($d) {  # when decrypting, always leave a free block at the end
-	$self->{'buffer'} = length($blocks[-1]) < $bs ? join '',splice(@blocks,-2) : pop(@blocks);
+    if ($d) {  # when decrypting, always leave a free block at the end
+      $self->{'buffer'} = length($blocks[-1]) < $bs ? join '',splice(@blocks,-2) : pop(@blocks);
     } else {
-	$self->{'buffer'} = pop @blocks if length($blocks[-1]) < $bs;  # what's left over
+      $self->{'buffer'} = pop @blocks if length($blocks[-1]) < $bs;  # what's left over
     }
-    
+
     foreach my $block (@blocks) {
-	if ($d) { # decrypting
-	    $result .= $iv ^ $self->{'crypt'}->decrypt($block);
-	    $iv = $block;
-	} else { # encrypting
-	    $result .= $iv = $self->{'crypt'}->encrypt($iv ^ $block);
-	}
+      if ($d) { # decrypting
+	$result .= $iv ^ $self->{'crypt'}->decrypt($block);
+	$iv = $block;
+      } else { # encrypting
+	$result .= $iv = $self->{'crypt'}->encrypt($iv ^ $block);
+      }
     }
     $self->{'civ'} = $iv;	        # remember the iv
     return $result;
@@ -206,20 +208,20 @@ sub finish (\$) {
     my $block = $self->{'buffer'};
 
     $self->{civ} ||= '';
-    
+
     my $result;
     if ($self->{'decrypt'}) { #decrypting
 	$block = pack("a$bs",$block); # pad and truncate to block size
 	
 	if (length($block)) {
-		$result = $self->{'civ'} ^ $self->{'crypt'}->decrypt($block);
-		$result = &{$self->{'padding'}}($result, $bs, 'd');
+	  $result = $self->{'civ'} ^ $self->{'crypt'}->decrypt($block);
+	  $result = $self->{'padding'}->($result, $bs, 'd');
 	} else {
-		$result = '';
+	  $result = '';
 	}
+
     } else { # encrypting
-      # pad to blocksize, and encrypt
-      $block = &{$self->{'padding'}}($block, $bs, '');
+      $block = $self->{'padding'}->($block,$bs,'e');
       $result = $self->{'crypt'}->encrypt($self->{'civ'} ^ $block);
     }
     delete $self->{'civ'};
@@ -227,56 +229,70 @@ sub finish (\$) {
     return $result;
 }
 
+sub _standard_padding ($$$) {
+  my ($block,$bs,$decrypt) = @_;
+
+  if ($decrypt eq 'd') {
+    substr($block,-unpack("C",substr($block,-1)))='';
+    return $block;
+  }
+
+  # if we get here we're encrypting
+  if (length $block == 0) {
+    $block = pack("C*",($bs)x$bs);
+  } elsif (length($block) < $bs) {
+    $block .= pack("C*",($bs-length($block)) x ($bs-length($block)));
+  }
+  return $block;
+}
+
 sub _space_padding ($$$) {
-	my $block = shift;
-	my $bs = shift;
-	my $decrypt = shift;
+  my $block = shift;
+  my $bs = shift;
+  my $decrypt = shift;
 	
-	if ($decrypt =~ /^d/) {	# decrypting
-		$block =~ s/ *$//s;
-	} else {
-		$block = pack("A$bs", $block);
-	}
-	
-	return $block;
+  if ($decrypt eq 'd') {	# decrypting
+    $block =~ s/ *$//s;
+  } else {
+    $block = pack("A$bs", $block);
+  }
+  return $block;
 	
 }
 
 sub _null_padding ($$$) {
-	my $block = shift;
-	my $bs = shift;
-	my $decrypt = shift;
+  my $block = shift;
+  my $bs = shift;
+  my $decrypt = shift;
 	
-	if ($decrypt =~ /^d/) {	# decrypting
-		my $null = pack("H2", "00");
-		$block =~ s/$null*$//s;
-	} else {
-		$block = pack("a$bs", $block);
-	}
-	
-	return $block;
-	
+  if ($decrypt eq 'd') {	# decrypting
+    my $null = pack("H2", "00");
+    $block =~ s/$null*$//s;
+  } else {
+    $block = pack("a$bs", $block);
+  }
+  return $block;
 }
 
 sub _oneandzeroes_padding ($$$) {
-	my $block = shift;
-	my $bs = shift;
-	my $decrypt = shift;
+  my $block = shift;
+  my $bs = shift;
+  my $decrypt = shift;
 	
-	if ($decrypt =~ /^d/) {	# decrypting
-		my $bitstring = unpack("B*", $block);
-		$bitstring =~ s/10*$//s;
-		while (length($bitstring)%8) {
-			# this shouldn't be the case, but let's make stuff full bytes...
-			$bitstring .= '0';
-		}
-		$block = pack("B*", $bitstring);
-	} else {
-		$block .= pack("H2", "80");
-		$block = pack("a$bs", $block);
-	}
+  if ($decrypt eq 'd') {	# decrypting
+    my $bitstring = unpack("B*", $block);
+    $bitstring =~ s/10*$//s;
+    while (length($bitstring)%8) {
+      # this shouldn't be the case, but let's make stuff full bytes...
+      $bitstring .= '0';
+    }
+    $block = pack("B*", $bitstring);
+  } else {
+    $block .= pack("H2", "80");
+    $block = pack("a$bs", $block);
+  }
 	
-	return $block;
+  return $block;
 }
 
 sub get_initialization_vector (\$) {
@@ -468,23 +484,36 @@ is called the first time.
 
 =head2 padding methods
 
-space, null, and oneandzeroes padding methods are provided.  You can
-additionally pass in a code reference as the padding method, and
-as long as that subroutine conforms to the same interface as the
-built in mehods, that subroutine will be used.
+When the last block of the encoded output is less than the block size,
+it will be padded.  Padding can take the form of "space" padding,
+"null" padding, "oneandzeroes" padding, and a "standard" padding in
+which the last block is padded with bytes representing the true size
+of the block.  The "padding" option controls what type of padding to
+use.  If none is provided, padding defaults to "standard".
 
-The interface is function(<block>, <blocksize>, <d[ecrypt]/e[ncrypt]>)
+Both the standard and oneandzeroes paddings are binary safe.  The
+space and null paddings are recommended only for text data.  Which
+type of padding you use depends on whether you wish to communicate
+with an external (non Crypt::CBC library).  If this is the case, use
+whatever padding method is compatible.
+
+You can also pass in a custom padding function.  To do this, create a
+function that takes the arguments:
+
+   $padded_block = function($block,$blocksize,$direction);
+
+where $block is the current block of data, $blocksize is the size to
+pad it to, $direction is "e" for encrypting and "d" for decrypting,
+and $padded_block is the result after padding or depadding.
 
 when encrypting, the function should always return a string of
 <blocksize> length, and when decrypting, can expect the string coming
-in to always be that length. See _space_padding, _null_padding, or
-_oneandzeroes_padding in the source for examples.
+in to always be that length. See _standard_padding, _space_padding,
+_null_padding, or _oneandzeroes_padding in the source for examples.
 
-oneandzeroes padding is recommended, as both space and null padding
-can potentially truncate more characters than they should.  Future
-versions of the module may include PKCS5 / PKCS7 padding support, but
-right now my Bruce Schneier Applied Cryptography book is missing.
-information into an e-mail message, Web page or URL.
+Standard padding is recommended, as both space and null padding can
+potentially truncate more characters than they should.  Future
+versions of the module may include PKCS5 / PKCS7 padding support.
 
 =head1 EXAMPLES
 

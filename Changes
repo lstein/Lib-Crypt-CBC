@@ -1,4 +1,8 @@
 Revision history for Perl extension Crypt::CBC.
+2.02	Thu Jan 24 00:15:52 EST 2002
+	- Default to pre-2.00 style padding, because Jody's default padding
+		method was not binary safe.
+
 2.01	Mon Dec 10 12:11:35 EST 2001
 	- Removed debugging code.
 

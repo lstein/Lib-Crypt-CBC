@@ -9,7 +9,7 @@ if ($@) {
     exit;
 }
 
-print "1..31\n";
+print "1..33\n";
 
 sub test {
     local($^W) = 0;
@@ -44,3 +44,11 @@ for (my $c=0;$c<=18;$c++) {
   $test_data = 'i' x $c;
   test (13+$c,$i->decrypt($i->encrypt($test_data)) eq $test_data);
 }
+
+
+# make sure that strings that end in spaces or nulls are treated correctly
+$test_data = "This string ends in a null\0";
+test (32,$i->decrypt($i->encrypt($test_data)) eq $test_data);
+
+$test_data = "This string ends in some spaces  ";
+test (33,$i->decrypt($i->encrypt($test_data)) eq $test_data);

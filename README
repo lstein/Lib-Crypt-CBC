@@ -11,7 +11,7 @@ In addition to this module you will need to install the MD5 module,
 and one or more of the Crypt::DES, Crypt::IDEA, or Crypt::Blowfish
 modules.
 
-1. MD5
+1. Digest::MD5
    Required for key and iteration vector generation.
 
 2. Crypt::DES
@@ -23,9 +23,17 @@ modules.
 4. Crypt::Blowfish
    Required for the Blowfish encryption algorithm.
 
-You can MD5, Crypt::DES, and Crypt::IDEA on a CPAN near you.
-Crypt::Blowfish can be found on the Cryptix web site at
+5. Crypt::Blowfish_PP
+   Required for the Blowfish_PP encryption algorithm.
+
+You can find Digest::MD5, Crypt::DES, and Crypt::IDEA on a CPAN near
+you.  Crypt::Blowfish can be found on the Cryptix web site at
 http://www.cryptix.org/.
+
+Unfortunately, Crypt::TripleDES does not work with this module, owing
+to the fact that it does not follow the same API as the other Crypt::*
+modules.  Please write to TripleDES's author, Vipul Ved Prakash
+<mail@vipul.net> and ask him to fix this.
 
 The Cryptix site also has versions of Crypt::DES and Crypt::IDEA that
 are slightly different from the CPAN versions.  Since these seem to be
@@ -41,7 +49,6 @@ Blowfish.xs files:
 For your convenience, a patch file which will bring the Cryptix
 directory up to date is included in this distribution.  It is named
 cryptix-5.005.patch.  Use it like this:
-
 
  % cd Cryptix-1.16
  % patch -p1 < ../Crypt-CBC/cryptix-5.005.patch 
