@@ -1,7 +1,9 @@
 Revision history for Perl extension Crypt::CBC.
+2.05	Tue Jun 11 22:18:04 EDT 2002
+	-Makes zero-and-one padding compatible with Crypt::Rijndael::MODE_CBC.
+
 2.04	Tue Jun 11 22:18:04 EDT 2002
-	-Patch from Stephen Waters to fix extra block when text is an even multiple of
-	blocksize; also makes zero-and-one padding compatible with Crypt::Rijndael::MODE_CBC.
+	WITHDRAWN VERSION DO NOT USE
 
 2.03	Mon Feb  4 15:41:51 EST 2002
 	-Patch from Andy Turner <turner@mikomi.org> to allow backward
