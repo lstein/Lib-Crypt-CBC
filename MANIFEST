@@ -7,3 +7,4 @@ eg/des.pl
 eg/idea.pl
 t/Rijndael_compat.t
 t/func.t
+META.yml                                 Module meta-data (added by MakeMaker)
