@@ -4,7 +4,7 @@ use Digest::MD5 'md5';
 use Carp;
 use strict;
 use vars qw($VERSION);
-$VERSION = '2.03';
+$VERSION = '2.04';
 
 sub new {
     my $class = shift;
@@ -174,19 +174,15 @@ sub crypt (\$$){
 
      my $bs = $self->{'blocksize'};
 
-     return $result unless (length($self->{'buffer'}) >= $bs);
+     return $result unless (length($self->{'buffer'}) > $bs);
 
     # split into blocksize chunks
-    # used to be:
-    # my @blocks = $self->{'buffer'}=~/(.{1,$bs})/ogs;
-    # but this is a little faster (about 1.5 times)
-    my @blocks = unpack("a$bs "x(int(length($self->{'buffer'})/$bs)) . "a*", $self->{'buffer'});
-    $self->{'buffer'} = '';
-
-    if ($d) {  # when decrypting, always leave a free block at the end
-      $self->{'buffer'} = length($blocks[-1]) < $bs ? join '',splice(@blocks,-2) : pop(@blocks);
+    my $bcnt = int(length($self->{'buffer'})/$bs);
+    my @blocks = unpack("a$bs "x $bcnt, $self->{'buffer'});
+    if (length($self->{'buffer'}) % $bs == 0) {
+      $self->{'buffer'} = pop @blocks; 
     } else {
-      $self->{'buffer'} = pop @blocks if length($blocks[-1]) < $bs;  # what's left over
+      $self->{'buffer'} = substr($self->{'buffer'}, $bcnt * $bs);
     }
 
     foreach my $block (@blocks) {
@@ -280,14 +276,10 @@ sub _oneandzeroes_padding ($$$) {
   my $decrypt = shift;
 	
   if ($decrypt eq 'd') {	# decrypting
-    my $bitstring = unpack("B*", $block);
-    $bitstring =~ s/10*$//s;
-    while (length($bitstring)%8) {
-      # this shouldn't be the case, but let's make stuff full bytes...
-      $bitstring .= '0';
-    }
-    $block = pack("B*", $bitstring);
-  } else {
+    my $hex = unpack("H*", $block);
+    $hex =~ s/80+$//s;
+    $block = pack("H*", $hex);
+  } elsif (length($block) < $bs) {
     $block .= pack("H2", "80");
     $block = pack("a$bs", $block);
   }
