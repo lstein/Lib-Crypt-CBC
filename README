@@ -8,8 +8,8 @@ Prerequisites
 -------------
 
 In addition to this module you will need to install the MD5 module,
-and one or more of the Crypt::DES, Crypt::IDEA, or Crypt::Blowfish
-modules.
+and one or more of: Crypt::DES, Crypt::DES_EDE3, Crypt::IDEA, 
+Crypt::Blowfish, or Crypt::Rijndael modules.
 
 1. Digest::MD5
    Required for key and iteration vector generation.
@@ -17,18 +17,23 @@ modules.
 2. Crypt::DES
    Required for the DES encryption algorithm.
 
-3. Crypt::IDEA
+3. Crypt::DES_EDE3
+   Required for the triple DES encryption algorithm in Encrypt Decrypt 
+   Encrypt mode. Note, this depends on Crypt::DES.
+
+4. Crypt::IDEA
    Required for the IDEA encryption algorithm.
 
-4. Crypt::Blowfish
+5. Crypt::Blowfish
    Required for the Blowfish encryption algorithm.
 
-5. Crypt::Blowfish_PP
+6. Crypt::Blowfish_PP
    Required for the Blowfish_PP encryption algorithm.
 
-You can find Digest::MD5, Crypt::DES, and Crypt::IDEA on a CPAN near
-you.  Crypt::Blowfish can be found on the Cryptix web site at
-http://www.cryptix.org/.
+7. Crypt::Rijndael
+   Required for the Rijndael/AES encryption algorithm.
+
+You can find these modules on a CPAN server near you!
 
 Unfortunately, Crypt::TripleDES does not work with this module, owing
 to the fact that it does not follow the same API as the other Crypt::*
@@ -68,10 +73,10 @@ The rest is easy
 	3. make test
 	4. make install
 
-Version 1.22 generates a random initialization vector, rather than
-generating one based on the key.  Not only is this much more secure,
-but it maintains compatibility with the current version of OpenSSL,
-which does the same thing as of version 0.9.5.  For backwards
+Versions 1.22 and greater generate a random initialization vector, 
+rather than generating one based on the key.  Not only is this much 
+more secure, but it maintains compatibility with the current version of 
+OpenSSL, which does the same thing as of version 0.9.5.  For backwards
 compatibility, messages encrypted with older versions of Crypt::CBC
 can be decrypted with the newer version.  The reverse is not true --
 the beginning messages encrypted by the new version and decrypted by

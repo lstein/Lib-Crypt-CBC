@@ -8,5 +8,6 @@ t/DES.t
 t/IDEA.t
 t/Blowfish.t
 t/Blowfish_PP.t
+t/Rijndael.t
 eg/des.pl
 eg/idea.pl

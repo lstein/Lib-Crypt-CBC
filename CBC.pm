@@ -4,7 +4,7 @@ use Digest::MD5 'md5';
 use Carp;
 use strict;
 use vars qw($VERSION);
-$VERSION = '2.04';
+$VERSION = '2.05';
 
 sub new {
     my $class = shift;
@@ -130,8 +130,7 @@ sub decrypt_hex (\$$) {
 sub start (\$$) {
     my $self = shift;
     my $operation = shift;
-    croak "Specify <e>ncryption or <d>ecryption" 
-	unless $operation=~/^[ed]/i;
+    croak "Specify <e>ncryption or <d>ecryption" unless $operation=~/^[ed]/i;
 
     unless (defined($self->{'iv'})) {
     	$self->{'iv'} = pack("C*",map {rand(256)} 1..8);
@@ -174,15 +173,19 @@ sub crypt (\$$){
 
      my $bs = $self->{'blocksize'};
 
-     return $result unless (length($self->{'buffer'}) > $bs);
+    return $result unless (length($self->{'buffer'}) >= $bs);
 
     # split into blocksize chunks
-    my $bcnt = int(length($self->{'buffer'})/$bs);
-    my @blocks = unpack("a$bs "x $bcnt, $self->{'buffer'});
-    if (length($self->{'buffer'}) % $bs == 0) {
-      $self->{'buffer'} = pop @blocks; 
+    # used to be:
+    # my @blocks = $self->{'buffer'}=~/(.{1,$bs})/ogs;
+    # but this is a little faster (about 1.5 times)
+    my @blocks = unpack("a$bs "x(int(length($self->{'buffer'})/$bs)) . "a*", $self->{'buffer'});
+    $self->{'buffer'} = '';
+
+    if ($d) {  # when decrypting, always leave a free block at the end
+      $self->{'buffer'} = length($blocks[-1]) < $bs ? join '',splice(@blocks,-2) : pop(@blocks);
     } else {
-      $self->{'buffer'} = substr($self->{'buffer'}, $bcnt * $bs);
+      $self->{'buffer'} = pop @blocks if length($blocks[-1]) < $bs;  # what's left over
     }
 
     foreach my $block (@blocks) {
@@ -226,65 +229,42 @@ sub finish (\$) {
 }
 
 sub _standard_padding ($$$) {
-  my ($block,$bs,$decrypt) = @_;
-
+  my ($b,$bs,$decrypt) = @_;
   if ($decrypt eq 'd') {
-    substr($block,-unpack("C",substr($block,-1)))='';
-    return $block;
+     substr($b, -unpack("C",substr($b,-1)))='';
+     return $b;
   }
-
-  # if we get here we're encrypting
-  if (length $block == 0) {
-    $block = pack("C*",($bs)x$bs);
-  } elsif (length($block) < $bs) {
-    $block .= pack("C*",($bs-length($block)) x ($bs-length($block)));
-  }
-  return $block;
+  my $pad = $bs - length($b) % $bs;
+  return $b . pack("C*",($pad)x$pad);
 }
 
 sub _space_padding ($$$) {
-  my $block = shift;
-  my $bs = shift;
-  my $decrypt = shift;
-	
-  if ($decrypt eq 'd') {	# decrypting
-    $block =~ s/ *$//s;
-  } else {
-    $block = pack("A$bs", $block);
+  my ($b,$bs,$decrypt) = @_;
+  if ($decrypt eq 'd') {
+     $b=~ s/ *$//s;
+     return $b;
   }
-  return $block;
-	
+  return $b . pack("C*", ' ' x ($bs - length($b) % $bs));
 }
 
 sub _null_padding ($$$) {
-  my $block = shift;
-  my $bs = shift;
-  my $decrypt = shift;
-	
-  if ($decrypt eq 'd') {	# decrypting
-    my $null = pack("H2", "00");
-    $block =~ s/$null*$//s;
-  } else {
-    $block = pack("a$bs", $block);
+  my ($b,$bs,$decrypt) = @_;
+  if ($decrypt eq 'd') {
+     $b=~ s/\0*$//s;
+     return $b;
   }
-  return $block;
+  return $b . pack("C*", "\0" x ($bs - length($b) % $bs));
 }
 
 sub _oneandzeroes_padding ($$$) {
-  my $block = shift;
-  my $bs = shift;
-  my $decrypt = shift;
-	
-  if ($decrypt eq 'd') {	# decrypting
-    my $hex = unpack("H*", $block);
-    $hex =~ s/80+$//s;
-    $block = pack("H*", $hex);
-  } elsif (length($block) < $bs) {
-    $block .= pack("H2", "80");
-    $block = pack("a$bs", $block);
+  my ($b,$bs,$decrypt) = @_;
+  if ($decrypt eq 'd') {
+     my $hex = unpack("H*", $b);
+     $hex =~ s/80*$//s;
+     return pack("H*", $hex);
   }
-	
-  return $block;
+  return $b . pack("C*", 
+                  pack("H2", "80") . "\0" x ($bs - length($b) % $bs - 1) );
 }
 
 sub get_initialization_vector (\$) {
@@ -314,13 +294,13 @@ Crypt::CBC - Encrypt Data with Cipher Block Chaining Mode
 =head1 SYNOPSIS
 
   use Crypt::CBC;
-  $cipher = Crypt::CBC->new( {	'key'		   => 'my secret key',
-  				'cipher'	   => 'Blowfish',
-  				'iv'		   => '$KJh#(}q',
-  				'regenerate_key'   => 0,
-  				'padding'	   => 'space',
-                                'prepend_iv'       => 0,
-  			);
+  $cipher = Crypt::CBC->new( {'key'             => 'my secret key',
+                              'cipher'          => 'Blowfish',
+                              'iv'              => '$KJh#(}q',
+                              'regenerate_key'  => 0,   # default true
+                              'padding'         => 'space',
+                              'prepend_iv'      => 0
+                           });
   
   $ciphertext = $cipher->encrypt("This data is hush hush");
   $plaintext = $cipher->decrypt($ciphertext);
@@ -341,24 +321,24 @@ DES or IDEA, you can encrypt and decrypt messages of arbitrarily long
 length.  The encrypted messages are compatible with the encryption
 format used by B<SSLeay>.
 
-To use this module, you will first create a new Crypt::CBC cipher object with
+To use this module, you will first create a Crypt::CBC cipher object with
 new().  At the time of cipher creation, you specify an encryption key
 to use and, optionally, a block encryption algorithm.  You will then
 call the start() method to initialize the encryption or decryption
 process, crypt() to encrypt or decrypt one or more blocks of data, and
-lastly finish(), to flush the encryption stream.  For your
+lastly finish(), to pad and encrypt the final block.  For your
 convenience, you can call the encrypt() and decrypt() methods to
 operate on a whole data value at once.
 
 =head2 new()
 
-  $cipher = Crypt::CBC->new( {	'key'		   => 'my secret key',
-  				'cipher'	   => 'Blowfish',
-  				'iv'		   => '$KJh#(}q',
-  				'regenerate_key'   => 0,	# default true
-  				'padding'	   => 'space',
-                                'prepend_iv'       => 0,
-  			);
+  $cipher = Crypt::CBC->new( {'key'             => 'my secret key',
+                              'cipher'          => 'Blowfish',
+                              'iv'              => '$KJh#(}q',
+                              'regenerate_key'  => 0,   # default true
+                              'padding'         => 'space',
+                              'prepend_iv'      => 0
+                           });
   
   # or (for compatibility with earlier versions)
   $cipher = new Crypt::CBC($key,$algorithm);
@@ -369,22 +349,22 @@ You must provide an encryption/decryption key, which can be any series
 of characters of any length.  If regenerate_key is not specified as a
 false value, the actual key used is derived from the MD5 hash of the
 key you provide.  The cipher is optional and will default to DES unless
-specified otherwise.  It is the block encryption algorithm to use,
-specified as a package name.  You may use any block encryption
-algorithm that you have installed.  At the time this was written, only
-three were available on CPAN, Crypt::DES, Crypt::IDEA, and
-Crypt::Blowfish.  You may refer to them using their full names
-("Crypt::IDEA") or in abbreviated form ("IDEA").  An initialization
-value may be specified, either by passing in a key of 'iv' as an option
-to new, or by calling $cipher->set_initialization_key($iv) before
-calling $cipher->start().  The initialization value will be ignored in
-decryption if the ciphertext is prepended by text which matches the
-regex /^RandomIV.{8}/, in which case the 8 characters following
-"RandomIV" will be used as the initialization value.  When encrypting,
-by default the ciphertext will be prepended with "RandomIVE<lt>IVE<gt>" (16 bytes);
-to disable this, set prepend_iv to a false value. The padding
-method can be specified by the optional 'padding' argument to new().
-If no padding method is specified, null padding is assumed.
+specified otherwise. You may use any compatible block encryption
+algorithm that you have installed. Currently, this includes Crypt::DES,
+Crypt::DES_EDE3, Crypt::IDEA, Crypt::Blowfish, and Crypt::Rijndael. You
+may refer to them using their full names ("Crypt::IDEA") or in 
+abbreviated form ("IDEA").  
+
+An initialization vector may be specified, either by passing in a key of
+'iv' as an option to new, or by calling 
+$cipher->set_initialization_key($iv) before calling $cipher->start().  
+The IV will be ignored in decryption if the ciphertext is prepended by 
+text which matches the regex /^RandomIV.{8}/, in which case the 8 
+characters following "RandomIV" will be used as the IV. When encrypting,
+by default the ciphertext will be prepended with "RandomIVE<lt>IVE<gt>"
+(16 bytes). To disable this, set 'prepend_iv' to a false value. The 
+padding method can be specified by the 'padding' option. If no padding 
+method is specified, PKCS#5 ("standard") padding is assumed.
 
 =head2 start()
 
@@ -453,36 +433,50 @@ can be useful if, for example, you wish to place the encrypted
 
   $iv = $cipher->get_initialization_vector()
 
-This function will return the initialization vector used in encryption
-and or decryption.  This function may be useful to determine the
-random initialization vector used when encrypting if none is specified
-in new().  The initialization vector is not guaranteed to be set when
-encrypting until start() is called, and when decrypting until crypt()
-is called the first time.
+This function will return the IV used in encryption and or decryption.
+This function may be useful to determine the random IV used when 
+encrypting if none is specified in new(). The IV is not guaranteed to
+be set when encrypting until start() is called, and when decrypting 
+until crypt() is called the first time.
 
 =head2 set_initialization_vector()
 
   $cipher->set_initialization_vector('76543210')
 
-This function sets the initialization vector used in encryption
-and or decryption.  This function may be useful if the initialization
-vector is not contained within the ciphertext string being decrypted,
-or if a particular initialization vector is desired when encrypting.
-If the initialization vector 
-random initialization vector used when encrypting if none is specified
-in new().  The initialization vector is not guaranteed to be set when
-encrypting until start() is called, and when decrypting until crypt()
-is called the first time.
+This function sets the IV used in encryption and/or decryption. This 
+function may be useful if the IV is not contained within the ciphertext
+string being decrypted, or if a particular IV is desired for encryption.
+If not set, a random IV will be generated. The IV is not guaranteed to
+be set when encrypting until start() is called, and when decrypting
+until crypt() is called the first time.
 
-=head2 padding methods
+=head2 Padding methods
 
-When the last block of the encoded output is less than the block size,
-it will be padded.  Padding can take the form of "space" padding,
-"null" padding, "oneandzeroes" padding, and a "standard" padding in
-which the last block is padded with bytes representing the true size
-of the block.  The "padding" option controls what type of padding to
-use.  If none is provided, padding defaults to "standard".
+Use the 'padding' option to change the padding method.
 
+When the last block of plaintext is shorter than the block size,
+it must be padded. Padding methods include: "standard" (i.e., PKCS#5),
+"oneandzeroes", "space", and "null".
+
+   standard: (default) Binary safe
+      pads with the number of bytes that should be truncated. So, if 
+      blocksize is 8, then "0A0B0C" will be padded with "05", resulting
+      in "0A0B0C0505050505". If the final block is a full block of 8 
+      bytes, then a whole block of "0808080808080808" is appended.
+
+   oneandzeroes: Binary safe
+      pads with "80" followed by as many "00" necessary to fill the
+      block. If the last block is a full block and blocksize is 8, a
+      block of "8000000000000000" will be appended.
+
+   null: text only
+      pads with as many "00" necessary to fill the block. If the last 
+      block is a full block and blocksize is 8, a block of 
+      "0000000000000000" will be appended.
+
+   space: text only
+      same as "null", but with "20".
+      
 Both the standard and oneandzeroes paddings are binary safe.  The
 space and null paddings are recommended only for text data.  Which
 type of padding you use depends on whether you wish to communicate
@@ -498,14 +492,13 @@ where $block is the current block of data, $blocksize is the size to
 pad it to, $direction is "e" for encrypting and "d" for decrypting,
 and $padded_block is the result after padding or depadding.
 
-when encrypting, the function should always return a string of
+When encrypting, the function should always return a string of
 <blocksize> length, and when decrypting, can expect the string coming
-in to always be that length. See _standard_padding, _space_padding,
-_null_padding, or _oneandzeroes_padding in the source for examples.
+in to always be that length. See _standard_padding(), _space_padding(),
+_null_padding(), or _oneandzeroes_padding() in the source for examples.
 
-Standard padding is recommended, as both space and null padding can
-potentially truncate more characters than they should.  Future
-versions of the module may include PKCS5 / PKCS7 padding support.
+Standard and oneandzeroes padding are recommended, as both space and
+null padding can potentially truncate more characters than they should. 
 
 =head1 EXAMPLES
 
@@ -533,6 +526,6 @@ terms as Perl itself.
 
 =head1 SEE ALSO
 
-perl(1), Crypt::DES(3), Crypt::IDEA(3)
+perl(1), Crypt::DES(3), Crypt::IDEA(3), rfc2898 (PKCS#5)
 
 =cut
