@@ -4,7 +4,7 @@ use Digest::MD5 'md5';
 use Carp;
 use strict;
 use vars qw($VERSION);
-$VERSION = '2.05';
+$VERSION = '2.06';
 
 sub new {
     my $class = shift;
@@ -244,7 +244,7 @@ sub _space_padding ($$$) {
      $b=~ s/ *$//s;
      return $b;
   }
-  return $b . pack("C*", ' ' x ($bs - length($b) % $bs));
+  return $b . pack("C*", (32) x ($bs - length($b) % $bs));
 }
 
 sub _null_padding ($$$) {
@@ -253,7 +253,7 @@ sub _null_padding ($$$) {
      $b=~ s/\0*$//s;
      return $b;
   }
-  return $b . pack("C*", "\0" x ($bs - length($b) % $bs));
+  return $b . pack("C*", (0) x ($bs - length($b) % $bs));
 }
 
 sub _oneandzeroes_padding ($$$) {
@@ -263,8 +263,7 @@ sub _oneandzeroes_padding ($$$) {
      $hex =~ s/80*$//s;
      return pack("H*", $hex);
   }
-  return $b . pack("C*", 
-                  pack("H2", "80") . "\0" x ($bs - length($b) % $bs - 1) );
+  return $b . pack("C*", 128, (0) x ($bs - length($b) % $bs - 1) );
 }
 
 sub get_initialization_vector (\$) {
