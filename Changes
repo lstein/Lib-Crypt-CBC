@@ -1,6 +1,11 @@
 Revision history for Perl extension Crypt::CBC.
+2.07	Thu Aug  8 14:44:52 EDT 2002
+	-Bug fixes from Stephen Waters to fix space padding
+	-Lots of regression tests from Stephen Waters
+
 2.05	Tue Jun 11 22:18:04 EDT 2002
 	-Makes zero-and-one padding compatible with Crypt::Rijndael::MODE_CBC.
+	-Lots of improvements to padding mechanisms from Stephen Waters
 
 2.04	Tue Jun 11 22:18:04 EDT 2002
 	WITHDRAWN VERSION DO NOT USE

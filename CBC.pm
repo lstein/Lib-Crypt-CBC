@@ -4,7 +4,7 @@ use Digest::MD5 'md5';
 use Carp;
 use strict;
 use vars qw($VERSION);
-$VERSION = '2.06';
+$VERSION = '2.07';
 
 sub new {
     my $class = shift;

@@ -1,13 +1,9 @@
 CBC.pm
 Changes
 MANIFEST
-README
 Makefile.PL
-cryptix-5.005.patch
-t/DES.t
-t/IDEA.t
-t/Blowfish.t
-t/Blowfish_PP.t
-t/Rijndael.t
+README
 eg/des.pl
 eg/idea.pl
+t/Rijndael_compat.t
+t/func.t
