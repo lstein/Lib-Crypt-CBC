@@ -1,4 +1,8 @@
 Revision history for Perl extension Crypt::CBC.
+2.03	Mon Feb  4 15:41:51 EST 2002
+	-Patch from Andy Turner <turner@mikomi.org> to allow backward
+	compatibility with old versions when key length exceeded max.
+
 2.02	Thu Jan 24 00:15:52 EST 2002
 	- Default to pre-2.00 style padding, because Jody's default padding
 		method was not binary safe.
