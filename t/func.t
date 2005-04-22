@@ -54,10 +54,10 @@ That lamb would dig a hole.
 END
     ;
 
-      test(\$tnum,$i = Crypt::CBC->new({key => 'secret',
-                                        cipher => $mod,
-                                        padding => $pad
-                                      }),
+      test(\$tnum,$i = Crypt::CBC->new(-key => 'secret',
+                                        -cipher => $mod,
+                                        -padding => $pad
+                                      ),
                                       "Couldn't create new object");
 
       test(\$tnum,$c = $i->encrypt($test_data),"Couldn't encrypt");

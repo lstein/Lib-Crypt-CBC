@@ -2,9 +2,9 @@
 
 use lib '..','../blib/lib','.','./blib/lib';
 
-eval "use Crypt::Blowfish()";
+eval "use Crypt::DES()";
 if ($@) {
-    print "1..0 # Skipped: Crypt::Blowfish not installed\n";
+    print "1..0 # Skipped: Crypt::DES not installed\n";
     exit;
 }
 
@@ -27,7 +27,11 @@ END
 eval "use Crypt::CBC";
 
 test(1,!$@,"Couldn't load module");
-test(2,$i = Crypt::CBC->new(-key=>'secret',-cipher=>'Blowfish'),"Couldn't create new object");
+test(2,$i = Crypt::CBC->new(-key=>'secret',
+			    -cipher=>'DES',
+			    -salt =>1,
+			    -pcbc=>1,
+			   ),"Couldn't create new object");
 test(3,$c = $i->encrypt($test_data),"Couldn't encrypt");
 test(4,$p = $i->decrypt($c),"Couldn't decrypt");
 test(5,$p eq $test_data,"Decrypted ciphertext doesn't match plaintext");
@@ -43,6 +47,7 @@ for (my $c=0;$c<=18;$c++) {
   $test_data = 'i' x $c;
   test (13+$c,$i->decrypt($i->encrypt($test_data)) eq $test_data);
 }
+
 
 # make sure that strings that end in spaces or nulls are treated correctly
 $test_data = "This string ends in a null\0";

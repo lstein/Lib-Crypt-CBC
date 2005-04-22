@@ -40,13 +40,12 @@ test(\$tnum,!$@,"Couldn't load module");
 
 for my $mod (@in) {
   for my $pad (@pads) {
-    my $cipher = Crypt::CBC->new({key => 'secret',
-				  cipher => $mod,
-				  padding => $pad
-				 });
+    my $cipher = Crypt::CBC->new(-key => 'secret',
+				  -cipher => $mod,
+				  -padding => $pad
+				);
     for my $length (1..128) {
       my $test_data = 'a'x$length . '0';
-                
       my $encrypted = $cipher->encrypt_hex($test_data);
       my $decrypted = $cipher->decrypt_hex($encrypted);
       test(\$tnum,$test_data eq $decrypted,"$mod/$pad: match failed on zero-terminated data length $length");

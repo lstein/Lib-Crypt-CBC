@@ -40,13 +40,13 @@ END
 eval "use Crypt::CBC";
 
 test(1,!$@,"Couldn't load module");
-test(2,$i = Crypt::CBC->new({key => 'a' x 16, 
-                             cipher => 'Rijndael',
-                             iv => 'f' x 16,
-                             regenerate_key => 0,
-                             prepend_iv => 0,
-                             padding => 'oneandzeroes'
-                           }),
+test(2,$i = Crypt::CBC->new(-key         => 'a' x 16,
+			    -cipher      => 'Rijndael',
+			    -iv          => 'f' x 16,
+			    -literal_key => 1,
+			    -add_header  => 0,
+			    -padding     => 'oneandzeroes'
+                           ),
                            "Couldn't create new object");
 test(3,$j = Crypt::Rijndael->new('a' x 16, Crypt::Rijndael->MODE_CBC),
                            "Couldn't create new object");

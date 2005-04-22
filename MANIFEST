@@ -11,6 +11,7 @@ t/Blowfish_PP.t
 t/CAST5.t
 t/DES.t
 t/IDEA.t
+t/PCBC.t
 t/Rijndael.t
 t/Rijndael_compat.t
 t/func.t
