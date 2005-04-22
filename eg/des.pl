@@ -1,9 +1,8 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 
 use lib '../blib/lib';
 
 use Getopt::Std;
-use Crypt::DES;
 use Crypt::CBC;
 use strict vars;
 
@@ -28,7 +27,9 @@ open (STDOUT,">$options{'o'}") || die "$options{'o'}: $!"
 
 my $key = $options{'k'} || get_key();
 # DES used by default
-my $cipher = Crypt::CBC->new($key) || die "Couldn't create CBC object";  
+my $cipher = Crypt::CBC->new(-key   => $key,
+			     -cipher=> 'DES',
+			     -salt  => 1) || die "Couldn't create CBC object";  
 my $decrypt = $options{'d'} and !$options{'e'};
 $cipher->start($decrypt ? 'decrypt' : 'encrypt');
 

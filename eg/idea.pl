@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 
 use lib '../blib/lib';
 
@@ -27,7 +27,10 @@ open(STDOUT,">$options{'o'}") or die "$options{'o'}: $!"
     if $options{'o'};
 
 my $key = $options{'k'} || get_key();
-my $cipher = Crypt::CBC->new($key,'IDEA') || die "Couldn't create CBC object";  
+my $cipher = Crypt::CBC->new(-key    =>  $key,
+			     -cipher => 'IDEA',
+			     -salt   => 1,
+			    ) || die "Couldn't create CBC object";  
 my $decrypt = $options{'d'} and !$options{'e'};
 $cipher->start($decrypt ? 'decrypt' : 'encrypt');
 
