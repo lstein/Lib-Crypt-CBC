@@ -4,7 +4,7 @@ use Digest::MD5 'md5';
 use Carp;
 use strict;
 use vars qw($VERSION);
-$VERSION = '2.13';
+$VERSION = '2.14';
 
 use constant RANDOM_DEVICE => '/dev/urandom';
 
@@ -239,8 +239,9 @@ sub _generate_iv_and_cipher_from_datastream {
 
   # if the input stream contains the IV, then we use it to set the IV
   elsif ( my($iv) = $$input_stream =~ /^RandomIV(.{8})/s) {
+    undef $self->{salt};              # message contents overrides salt option
     $self->{'iv'} = $iv;
-    substr($$input_stream,0,16) = ''; #truncate
+    substr($$input_stream,0,16) = ''; # truncate
   }
 
   if (my $salt = $self->{salt}) {

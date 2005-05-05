@@ -1,4 +1,8 @@
 Revision history for Perl extension Crypt::CBC.
+2.14	Thu May  5 16:08:15 EDT 2005
+	- RandomIV in message header overrides manually-supplied -salt, as one
+	would expect it should.
+
 2.13	Fri Apr 22 13:01:32 EDT 200
 	- Added OpenSSL compatibility
 	- Salt and IV generators take advantage of /dev/urandom device, if available
