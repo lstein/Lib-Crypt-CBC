@@ -4,7 +4,7 @@ use Digest::MD5 'md5';
 use Carp;
 use strict;
 use vars qw($VERSION);
-$VERSION = '2.14';
+$VERSION = '2.15';
 
 use constant RANDOM_DEVICE => '/dev/urandom';
 
@@ -19,7 +19,7 @@ sub new {
     }
 
     # CGI style arguments
-    elsif ($_[0] =~ /^-/) {
+    elsif ($_[0] =~ /^-[a-zA-Z]{1,20}$/) {
       my %tmp = @_;
       while ( my($key,$value) = each %tmp) {
 	$key =~ s/^-//;
