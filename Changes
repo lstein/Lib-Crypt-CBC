@@ -1,4 +1,8 @@
 Revision history for Perl extension Crypt::CBC.
+2.15	Thu Nov 17 17:34:28 EST 2005
+	- -add_header=>0 now explicitly turns off any attempt of parsing the header
+		in decrypt routines.
+
 2.14	Thu May  5 16:08:15 EDT 2005
 	- RandomIV in message header overrides manually-supplied -salt, as one
 	would expect it should.
