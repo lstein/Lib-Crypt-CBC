@@ -230,26 +230,31 @@ sub _generate_iv_and_cipher_from_datastream {
 
   # if the input stream contains the salt, then it is used to derive the
   # IV and the encryption key from the passphrase
-  if (my($salt) = $$input_stream =~ /^Salted__(.{8})/s) {
-    $self->{salt} = $salt;          # Replace manually-specified salt
-    undef $self->{key};             # reset the key and iv
-    undef $self->{iv};
-    substr($$input_stream,0,16) = '';
-  }
+  if ($self->{prepend_header}) {
+    if (my($salt) = $$input_stream =~ /^Salted__(.{8})/s) {
+      $self->{salt} = $salt;          # Replace manually-specified salt
+      undef $self->{key};             # reset the key and iv
+      undef $self->{iv};
+      substr($$input_stream,0,16) = '';
+    }
 
-  # if the input stream contains the IV, then we use it to set the IV
-  elsif ( my($iv) = $$input_stream =~ /^RandomIV(.{8})/s) {
-    undef $self->{salt};              # message contents overrides salt option
-    $self->{'iv'} = $iv;
-    substr($$input_stream,0,16) = ''; # truncate
-  }
+    # if the input stream contains the IV, then we use it to set the IV
+    elsif ( my($iv) = $$input_stream =~ /^RandomIV(.{8})/s) {
+      undef $self->{salt};              # message contents overrides salt option
+      $self->{'iv'} = $iv;
+      substr($$input_stream,0,16) = ''; # truncate
+    }
 
-  if (my $salt = $self->{salt}) {
-    my ($key,$iv) = $self->_salted_key_and_iv($self->{passphrase},$salt);
-    $self->{key}  ||= $key;   # don't replace manually-specified key
-    $self->{iv}   ||= $iv;    # don't replace manually-specified IV
+    if (my $salt = $self->{salt}) {
+      my ($key,$iv) = $self->_salted_key_and_iv($self->{passphrase},$salt);
+      $self->{key}  ||= $key;   # don't replace manually-specified key
+      $self->{iv}   ||= $iv;    # don't replace manually-specified IV
+    } else {
+      $self->{key}  ||= $self->_key_from_key($self->{passphrase});  # don't replace manually-specified key
+    }
+
   } else {
-    $self->{key}  ||= $self->_key_from_key($self->{passphrase});  # don't replace manually-specified key
+    $self->{key}    ||= $self->_key_from_key($self->{passphrase});
   }
 
   # we should have the key and iv now, or we are dead in the water
