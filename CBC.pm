@@ -4,7 +4,7 @@ use Digest::MD5 'md5';
 use Carp;
 use strict;
 use vars qw($VERSION);
-$VERSION = '2.15';
+$VERSION = '2.16';
 
 use constant RANDOM_DEVICE => '/dev/urandom';
 
@@ -70,8 +70,11 @@ sub new {
     # some crypt modules use the class Crypt::, and others don't
     $cipher =~ s/^Crypt::// unless $cipher->can('keysize');
 
-    my $ks = eval {$cipher->keysize};
-    my $bs = eval {$cipher->blocksize};
+    my $ks = $options->{keysize};
+    my $bs = $options->{blocksize};
+
+    $ks ||= eval {$cipher->keysize};
+    $bs ||= eval {$cipher->blocksize};
 
     my $padding = $options->{padding} || 'standard';
 
@@ -540,6 +543,10 @@ The new() method creates a new Crypt::CBC object. It accepts a list of
   -add_header     Whether to add the salt and IV to the header of the output
                     cipher text.
 
+  -keysize        Force the cipher keysize to the indicated number of bytes.
+
+  -blocksize      Force the cipher blocksize to the indicated number of bytes.
+
   -regenerate_key [deprecated; use literal_key instead]
                   Whether to use a hash of the provided key to generate
                     the actual encryption key (default true)
@@ -588,6 +595,16 @@ The B<-pcbc> argument, if true, activates a modified chaining mode
 known as PCBC. It provides better error propagation characteristics
 than the default CBC encryption and is required for authenticating to
 Kerberos4 systems (see RFC 2222).
+
+The B<-keysize> and B<-blocksize> arguments can be used to force the
+cipher's keysize and/or blocksize. This is only currently useful for
+the Crypt::Blowfish module, which accepts a variable length
+keysize. If -keysize is not specified, then Crypt::CBC will use the
+maximum length Blowfish key size of 56 bytes (448 bits). The Openssl
+library defaults to 16 byte Blowfish key sizes, so for compatibility
+with Openssl you may wish to set -keysize=>16. There are currently no
+Crypt::* modules that have variable block sizes, but an option to
+change it is provided just in case.
 
 When generating ciphertext, the IV or salt are inserted into the
 encrypted data as a 16 byte header. If the B<-salt> option was

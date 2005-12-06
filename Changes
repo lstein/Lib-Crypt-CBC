@@ -1,4 +1,12 @@
 Revision history for Perl extension Crypt::CBC.
+2.16	Tue Dec  6 14:17:45 EST 2005
+	- Added two new options to new():
+		-keysize   => <bytes>  Force the keysize -- useful for Blowfish
+		-blocksize => <bytes>  Force the blocksize -- not known to be useful
+
+		("-keysize=>16" is necessary to decrypt OpenSSL messages encrypted with
+			Blowfish)
+
 2.15	Thu Nov 17 17:34:28 EST 2005
 	- -add_header=>0 now explicitly turns off any attempt of parsing the header
 		in decrypt routines.
