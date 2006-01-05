@@ -4,7 +4,7 @@ use Digest::MD5 'md5';
 use Carp;
 use strict;
 use vars qw($VERSION);
-$VERSION = '2.16';
+$VERSION = '2.17';
 
 use constant RANDOM_DEVICE => '/dev/urandom';
 
@@ -70,8 +70,9 @@ sub new {
     # some crypt modules use the class Crypt::, and others don't
     $cipher =~ s/^Crypt::// unless $cipher->can('keysize');
 
-    my $ks = $options->{keysize};
-    my $bs = $options->{blocksize};
+    my $ks        = $options->{keysize};
+    my $bs        = $options->{blocksize};
+    my $legacy_iv = $options->{legacy_iv};
 
     $ks ||= eval {$cipher->keysize};
     $bs ||= eval {$cipher->blocksize};
@@ -116,6 +117,7 @@ sub new {
 		  'blocksize'  => $bs,
 		  'keysize'    => $ks,
                   'prepend_header' => $prepend_header,
+		  'legacy_iv' => $legacy_iv,
                   'pcbc'       => $pcbc,
 		  },$class;
 }
@@ -237,6 +239,7 @@ sub finish (\$) {
 sub _generate_iv_and_cipher_from_datastream {
   my $self         = shift;
   my $input_stream = shift;
+  my $ivs          = $self->iv_size;
 
   # if the input stream contains the salt, then it is used to derive the
   # IV and the encryption key from the passphrase
@@ -249,10 +252,10 @@ sub _generate_iv_and_cipher_from_datastream {
     }
 
     # if the input stream contains the IV, then we use it to set the IV
-    elsif ( my($iv) = $$input_stream =~ /^RandomIV(.{8})/s) {
+    elsif ( my($iv) = $$input_stream =~ /^RandomIV(.{$ivs})/s) {
       undef $self->{salt};              # message contents overrides salt option
       $self->{'iv'} = $iv;
-      substr($$input_stream,0,16) = ''; # truncate
+      substr($$input_stream,0,8+$ivs) = ''; # truncate
     }
 
     if (my $salt = $self->{salt}) {
@@ -282,6 +285,7 @@ sub _generate_iv_and_cipher_from_datastream {
 
 sub _generate_iv_and_cipher_from_options {
   my $self   = shift;
+  my $blocksize = $self->blocksize;
 
   my $result = '';
 
@@ -295,7 +299,7 @@ sub _generate_iv_and_cipher_from_options {
 
   else {
     $self->{key} ||= $self->_key_from_key($self->{passphrase});
-    $self->{iv}  ||= $self->_get_random_bytes(8);
+    $self->{iv}  ||= $self->_get_random_bytes($self->iv_size);
     $result = "RandomIV$self->{iv}" if $self->{'prepend_header'};
   }
 
@@ -445,11 +449,17 @@ sub passphrase {
   $d;
 }
 
-sub cipher  { shift->{cipher}  }
-sub padding { shift->{padding} }
-sub keysize { shift->{keysize} }
+sub cipher    { shift->{cipher}    }
+sub padding   { shift->{padding}   }
+sub keysize   { shift->{keysize}   }
 sub blocksize { shift->{blocksize} }
-sub pcbc    { shift->{pcbc}    }
+sub pcbc      { shift->{pcbc}      }
+sub legacy_iv { shift->{legacy_iv} }
+sub iv_size   {
+  my $self = shift;
+  return 8 if $self->legacy_iv;
+  return      $self->blocksize;
+}
 
 1;
 __END__
@@ -547,6 +557,9 @@ The new() method creates a new Crypt::CBC object. It accepts a list of
 
   -blocksize      Force the cipher blocksize to the indicated number of bytes.
 
+  -legacy_iv      Use (broken) IV length of 8 bytes, rather than correct length
+                   of blocksize bytes.
+
   -regenerate_key [deprecated; use literal_key instead]
                   Whether to use a hash of the provided key to generate
                     the actual encryption key (default true)
@@ -556,9 +569,13 @@ The new() method creates a new Crypt::CBC object. It accepts a list of
                     encrypted stream (default true)
 
 You must provide an encryption/decryption B<-key>, which can be any
-series of characters of any length.  If B<-regenerate_key> is true (the
-default), then the actual key used is derived from the MD5 hash of the
-key you provide; otherwise the actual binary bits of the key are used.
+series of characters of any length. By default, the value you pass as
+-key will be used to derive the true key by using a series of MD5
+hashes (i.e. the value is used as a passphrase). However, if you pass
+a true value for the B<-literal_key> flag, then the actual binary bits
+of the value you pass to -key will be used as the encryption key. In
+this case, you should choose a key of length exactly equal to the
+cipher's key length.
 
 The B<-cipher> option specifies which block cipher algorithm to use to
 encode each section of the message.  This argument is optional and
@@ -579,9 +596,9 @@ default for this module when header generation is active.
 
 The initialization vector (IV) is used to start the CBC chaining
 algorithm.  Unless you have also specified a false value for
-B<-add_header>, the IV should be exactly 8 bytes in length. The IV may
-be specified manually by passing in a key of B<-iv> as an option to
-new() or by calling $cipher->set_initialization_vector($iv) before
+B<-add_header>, the IV should be exactly blocksize bytes long. The IV
+may be specified manually by passing in a key of B<-iv> as an option
+to new() or by calling $cipher->set_initialization_vector($iv) before
 calling $cipher->start().  If no IV is specified, then one will be
 generated randomly for you.  This is backwardly compatible with CBC
 encrypted streams generated by the older SSLEay library.
@@ -627,6 +644,14 @@ are the same as the arguments described earlier, but without the
 initial hyphen.  You may also call new() with one or two positional
 arguments, in which case the first argument is taken to be the key and
 the second to be the optional block cipher algorithm.
+
+IMPORTANT NOTE: Versions of this module prior to 2.17 were incorrectly
+using 8 byte IVs when generating the old-style RandomIV style header
+(as opposed to the new-style random salt header). This affects the
+Rijndael algorithm, which has a 16 byte blocksize. The bug has been
+corrected in versions 2.17 and higher, but in order to read legacy
+encrypted data, you will have to pass the B<-legacy_iv> option to
+new() using a true value.
 
 =head2 start()
 
@@ -689,7 +714,8 @@ the corresponding plaintext.
 These are convenience functions that operate on ciphertext in a
 hexadecimal representation.  B<encrypt_hex($plaintext)> is exactly
 equivalent to B<unpack('H*',encrypt($plaintext))>.  These functions
-can be useful if, for example, you wish to place the encrypted
+can be useful if, for example, you wish to place the encrypted in an
+email message.
 
 =head2 get_initialization_vector()
 
@@ -706,7 +732,8 @@ called, and when decrypting until crypt() is called the first time.
 This function sets the IV used in encryption and/or decryption. This
 function may be useful if the IV is not contained within the
 ciphertext string being decrypted, or if a particular IV is desired
-for encryption.  Note that the IV must be 8 bytes in length.
+for encryption.  Note that the IV must be the chosen cipher's
+blocksize bytes in length.
 
 =head2 iv()
 
