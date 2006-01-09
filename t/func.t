@@ -57,7 +57,6 @@ END
       test(\$tnum,$i = Crypt::CBC->new(-key => 'secret',
 				       -cipher => $mod,
 				       -padding => $pad,
-				       -salt    => 1,
                                       ),
                                       "Couldn't create new object");
 

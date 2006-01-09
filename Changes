@@ -1,12 +1,25 @@
 Revision history for Perl extension Crypt::CBC.
-2.17    Thu Jan  5 16:52:45 EST 2006
+2.17    Mon Jan  9 18:22:51 EST 2006
         -IMPORTANT NOTE: Versions of this module prior to 2.17 were incorrectly
 	using 8 byte IVs when generating the old-style RandomIV style header
-	(as opposed to the new-style random salt header). This affects the
-	Rijndael algorithm, which has a 16 byte blocksize. The bug has been
-	corrected in versions 2.17 and higher, but in order to read legacy
-	encrypted data, you will have to pass the B<-legacy_iv> option to
-	new() using a true value.
+	(as opposed to the new-style random salt header). This affects data
+        encrypted using the Rijndael algorithm, which has a 16 byte blocksize,
+        and is a significant security issue.
+
+        The bug has been corrected in versions 2.17 and higher by making it
+        impossible to use 16-byte block ciphers with RandomIV headers. You may
+        still read legacy encrypted data by explicitly passing the 
+        -insecure_legacy_decrypt option to Crypt::CBC->new().
+
+        -The salt, iv and key are now reset before each complete encryption
+         cycle. This avoids inadvertent reuse of the same salt.
+
+        -A new -header option has been added that allows you to select
+         among the various types of headers, and avoids the ambiguity
+         of having multiple interacting options.
+
+        -A new random_bytes() method provides access to /dev/urandom on
+         suitably-equipped hardware.
 
 2.16	Tue Dec  6 14:17:45 EST 2005
 	- Added two new options to new():

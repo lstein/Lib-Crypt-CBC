@@ -17,3 +17,5 @@ t/Rijndael.t
 t/Rijndael_compat.t
 t/func.t
 t/null_data.t
+t/parameters.t
+

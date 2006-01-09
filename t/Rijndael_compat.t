@@ -39,18 +39,21 @@ END
 
 eval "use Crypt::CBC";
 
+my $bs = Crypt::Rijndael->blocksize;
+my $ks = Crypt::Rijndael->keysize;
+
 test(1,!$@,"Couldn't load module");
-test(2,$i = Crypt::CBC->new(-key         => 'a' x 16,
+test(2,$i = Crypt::CBC->new(-key         => 'a' x $ks,
 			    -cipher      => 'Rijndael',
-			    -iv          => 'f' x 16,
+			    -iv          => 'f' x $bs,
 			    -literal_key => 1,
-			    -add_header  => 0,
+			    -header      => 'none',
 			    -padding     => 'oneandzeroes'
                            ),
                            "Couldn't create new object");
-test(3,$j = Crypt::Rijndael->new('a' x 16, Crypt::Rijndael->MODE_CBC),
+test(3,$j = Crypt::Rijndael->new('a' x $ks, Crypt::Rijndael->MODE_CBC),
                            "Couldn't create new object");
-test(4,$j->set_iv('f' x 16));
+test(4,$j->set_iv('f' x $bs));
 
 test(5,$i->decrypt($i->encrypt($test_data)) eq $j->decrypt($j->encrypt($test_data)),"Decrypt doesn't match");
 
