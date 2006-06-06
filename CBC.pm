@@ -4,7 +4,7 @@ use Digest::MD5 'md5';
 use Carp;
 use strict;
 use vars qw($VERSION);
-$VERSION = '2.17';
+$VERSION = '2.18';
 
 use constant RANDOM_DEVICE => '/dev/urandom';
 

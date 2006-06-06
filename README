@@ -4,14 +4,10 @@ such as Crypt::DES or Crypt::IDEA, you can encrypt and decrypt
 messages of arbitrarily long length.  The encrypted messages are
 compatible with the encryption format used by B<SSLeay>.
 
-IMPORTANT NOTE: Versions of this module prior to 2.17 were incorrectly
-using 8 byte IVs when generating the old-style RandomIV style header
-(as opposed to the new-style random salt header). This affects the
-Rijndael algorithm, which has a 16 byte blocksize. The bug has been
-corrected in versions 2.17 and higher, but in order to read legacy
-encrypted data, you will have to pass the B<-legacy_iv> option to
-new() using a true value.
-
+WARNING: Crypt::CBC versions 2.17 and higher will not decrypt messages
+encrypted with versions 2.16 and lower unless you pass certain options
+to the new() call. This was done for very good reasons. Please see
+README.compatibility for details.
 
 Prerequisites
 -------------

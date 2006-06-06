@@ -4,6 +4,8 @@ MANIFEST
 META.yml			Module meta-data (added by MakeMaker)
 Makefile.PL
 README
+README.compatibility
+Crypt::CBC-2.16-vulnerability.txt
 eg/aes.pl
 eg/des.pl
 eg/idea.pl
