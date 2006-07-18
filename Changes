@@ -1,4 +1,11 @@
 Revision history for Perl extension Crypt::CBC.
+2.19    Tue Jul 18 18:39:57 EDT 2006
+	- Renamed Crypt::CBC-2.16-vulnerability.txt so that package installs correctly under
+	Cygwin
+
+2.18   2006/06/06 23:17:04
+	- added more documentation describing how to achieve compatibility with old encrypted messages
+
 2.17    Mon Jan  9 18:22:51 EST 2006
         -IMPORTANT NOTE: Versions of this module prior to 2.17 were incorrectly
 	using 8 byte IVs when generating the old-style RandomIV style header
