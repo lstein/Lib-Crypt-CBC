@@ -1,4 +1,8 @@
 Revision history for Perl extension Crypt::CBC.
+2.20	Sat Aug 12 22:30:53 EDT 2006
+	- Added ability to pass a preinitialized Crypt::* block cipher object instead of
+	the class name.
+
 2.19    Tue Jul 18 18:39:57 EDT 2006
 	- Renamed Crypt::CBC-2.16-vulnerability.txt so that package installs correctly under
 	Cygwin
