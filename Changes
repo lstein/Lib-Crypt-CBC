@@ -1,4 +1,7 @@
 Revision history for Perl extension Crypt::CBC.
+2.21	Mon Oct 16 19:26:26 EDT 2006
+	- Fixed bug in which new() failed to work when first option is -literal_key.
+
 2.20	Sat Aug 12 22:30:53 EDT 2006
 	- Added ability to pass a preinitialized Crypt::* block cipher object instead of
 	the class name.
