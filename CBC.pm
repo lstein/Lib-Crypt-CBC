@@ -4,7 +4,7 @@ use Digest::MD5 'md5';
 use Carp;
 use strict;
 use vars qw($VERSION);
-$VERSION = '2.21';
+$VERSION = '2.22';
 
 use constant RANDOM_DEVICE => '/dev/urandom';
 
@@ -90,8 +90,9 @@ sub new {
     # But if the literal_key option is true, then use key as is
     croak "The options -literal_key and -regenerate_key are incompatible with each other" 
       if exists $options->{literal_key} && exists $options->{regenerate_key};
-    my $key  =  $pass if $options->{literal_key};
-    $key     = $pass  if exists $options->{regenerate_key} && !$options->{regenerate_key};
+    my $key;
+    $key     = $pass if $options->{literal_key};
+    $key     = $pass if exists $options->{regenerate_key} && !$options->{regenerate_key};
 
     # Get the salt.
     my $salt        = $options->{salt};
@@ -103,6 +104,7 @@ sub new {
     my $random_iv = 1 unless defined $iv;
     croak "Initialization vector must be exactly $bs bytes long when using the $cipherclass cipher" if defined $iv and length($iv) != $bs;
 
+    my $literal_key = $options->{literal_key} || (exists $options->{regenerate_key} && !$options->{regenerate_key});
     my $legacy_hack = $options->{insecure_legacy_decrypt};
     my $padding     = $options->{padding} || 'standard';
 
@@ -155,6 +157,7 @@ sub new {
 		  'keysize'     => $ks,
                   'header_mode' => $header_mode,
 		  'legacy_hack' => $legacy_hack,
+                  'literal_key' => $literal_key,
                   'pcbc'        => $pcbc,
 		  'make_random_salt' => $random_salt,
 		  'make_random_iv'   => $random_iv,
@@ -371,6 +374,8 @@ sub _key_from_key {
   my $self  = shift;
   my $pass  = shift;
   my $ks    = $self->{keysize};
+
+  return $pass if $self->{literal_key};
 
   my $material = md5($pass);
   while (length($material) < $ks)  {
@@ -690,7 +695,8 @@ advantage of a given block cipher, the length of the passphrase should
 be at least equal to the cipher's blocksize. To skip this hashing
 operation and specify the key directly, pass a true value to the
 B<-literal_key> option. In this case, you should choose a key of
-length exactly equal to the cipher's key length.
+length exactly equal to the cipher's key length. You should also
+specify the IV yourself and a -header mode of 'none'.
 
 If you pass an existing Crypt::* object to new(), then the -key
 argument is ignored and the module will generate a warning.

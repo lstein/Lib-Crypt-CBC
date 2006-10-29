@@ -1,10 +1,18 @@
 Revision history for Perl extension Crypt::CBC.
+2.22	Sun Oct 29 16:50:32 EST 2006
+	- Fixed bug in which plaintext encrypted with the -literal_key
+	option could not be decrypted using a new object created with
+	the same -literal_key.
+ 	- Added documentation confirming that -literal_key must be accompanied by a 
+	-header of 'none' and a manually specificied IV.
+
 2.21	Mon Oct 16 19:26:26 EDT 2006
 	- Fixed bug in which new() failed to work when first option is -literal_key.
 
 2.20	Sat Aug 12 22:30:53 EDT 2006
 	- Added ability to pass a preinitialized Crypt::* block cipher object instead of
 	the class name.
+        - Fixed a bug when processing -literal_key.
 
 2.19    Tue Jul 18 18:39:57 EDT 2006
 	- Renamed Crypt::CBC-2.16-vulnerability.txt so that package installs correctly under

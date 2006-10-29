@@ -13,7 +13,7 @@ That lamb would dig a hole.
 END
     ;
 
-print "1..61\n";
+print "1..63\n";
 
 eval "use Crypt::CBC";
 test(1,!$@,"Couldn't load module");
@@ -215,6 +215,15 @@ test(61,
 				    -iv                      => 'a'x16)
      },
      "module allowed initialization of header_mode 'none' without a key");
+
+$crypt = eval {Crypt::CBC->new(-cipher         => 'Crypt::Crypt8',
+			       -literal_key    => 1,
+			       -header         => 'none',
+			       -key            => 'a'x56,
+			       -iv             => 'b'x8,
+			      ) };
+test(62,defined $crypt,"unable to create a Crypt::CBC object with the -literal_key option: $@");
+test(63,$plaintext eq $crypt->decrypt($crypt->encrypt($plaintext)),'cannot decrypt encrypted data using -literal_key');
 
 exit 0;
 
