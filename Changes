@@ -1,4 +1,9 @@
 Revision history for Perl extension Crypt::CBC.
+2.23	Fri Apr 13 14:50:21 EDT 2007
+	- Added checks for other implementations of CBC which add no
+	standard padding at all when cipher text is an even multiple
+	of the block size.
+
 2.22	Sun Oct 29 16:50:32 EST 2006
 	- Fixed bug in which plaintext encrypted with the -literal_key
 	option could not be decrypted using a new object created with
