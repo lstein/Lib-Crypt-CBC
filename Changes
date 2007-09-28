@@ -1,4 +1,9 @@
 Revision history for Perl extension Crypt::CBC.
+2.24	Fri Sep 28 11:21:07 EDT 2007
+	- Fixed failure to run under taint checks with Crypt::Rijndael
+	or Crypt::OpenSSL::AES (and maybe other Crypt modules). See 
+	http://rt.cpan.org/Public/Bug/Display.html?id=29646.
+
 2.23	Fri Apr 13 14:50:21 EDT 2007
 	- Added checks for other implementations of CBC which add no
 	standard padding at all when cipher text is an even multiple

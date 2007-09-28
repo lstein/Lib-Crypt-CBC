@@ -4,7 +4,7 @@ use Digest::MD5 'md5';
 use Carp;
 use strict;
 use vars qw($VERSION);
-$VERSION = '2.23';
+$VERSION = '2.24';
 
 use constant RANDOM_DEVICE => '/dev/urandom';
 
@@ -422,7 +422,9 @@ sub _get_random_bytes {
   } else {
     $result = pack("C*",map {rand(256)} 1..$length);
   }
-  $result;
+  # Clear taint and check length
+  $result =~ /^(.{$length})$/s or croak "Invalid length while gathering $length randim bytes";
+  return $1;
 }
 
 sub _standard_padding ($$$) {
