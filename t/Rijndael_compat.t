@@ -48,7 +48,7 @@ test(2,$i = Crypt::CBC->new(-key         => 'a' x $ks,
 			    -iv          => 'f' x $bs,
 			    -literal_key => 1,
 			    -header      => 'none',
-			    -padding     => 'oneandzeroes'
+			    -padding     => 'rijndael_compat',
                            ),
                            "Couldn't create new object");
 test(3,$j = Crypt::Rijndael->new('a' x $ks, Crypt::Rijndael->MODE_CBC),

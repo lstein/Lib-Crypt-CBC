@@ -16,6 +16,7 @@ t/DES.t
 t/IDEA.t
 t/PCBC.t
 t/Rijndael.t
+t/onezeropadding.t
 t/Rijndael_compat.t
 t/func.t
 t/null_data.t

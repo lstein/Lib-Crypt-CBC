@@ -116,24 +116,29 @@ sub new {
 	  unless ($rbs == $bs);
       }
     } else {
-      $padding = $padding eq 'null'          ? \&_null_padding
-	        :$padding eq 'space'         ? \&_space_padding
-		:$padding eq 'oneandzeroes'  ? \&_oneandzeroes_padding
-                :$padding eq 'standard'      ? \&_standard_padding
+      $padding = $padding eq 'null'           ? \&_null_padding
+	        :$padding eq 'space'          ? \&_space_padding
+		:$padding eq 'oneandzeroes'   ? \&_oneandzeroes_padding
+		:$padding eq 'rijndael_compat'? \&_rijndael_compat
+                :$padding eq 'standard'       ? \&_standard_padding
 	        :croak "'$padding' padding not supported.  See perldoc Crypt::CBC for instructions on creating your own.";
     }
 
     # CONSISTENCY CHECKS
     # HEADER consistency
     if ($header_mode eq 'salt') {
-      croak "Cannot use salt-based key generation if literal key is specified" if $options->{literal_key};
-      croak "Cannot use salt-based IV generation if literal IV is specified"   if exists $options->{iv};
+      croak "Cannot use salt-based key generation if literal key is specified"
+	if $options->{literal_key};
+      croak "Cannot use salt-based IV generation if literal IV is specified"
+	if exists $options->{iv};
     }
     elsif ($header_mode eq 'randomiv') {
-      croak "Cannot encrypt using a non-8 byte blocksize cipher when using randomiv header mode" unless $bs == 8 || $legacy_hack;
+      croak "Cannot encrypt using a non-8 byte blocksize cipher when using randomiv header mode"
+	unless $bs == 8 || $legacy_hack;
     }
     elsif ($header_mode eq 'none') {
-      croak "You must provide an initialization vector using -iv when using -header=>'none'" unless exists $options->{iv};
+      croak "You must provide an initialization vector using -iv when using -header=>'none'"
+	unless exists $options->{iv};
     }
 
     # KEYSIZE consistency
@@ -221,6 +226,10 @@ sub crypt (\$$){
     $self->{'buffer'} .= $data;
 
     my $bs = $self->{'blocksize'};
+
+    croak "When using rijndael_compat padding, plaintext size must be a multiple of $bs"
+      if $self->{'padding'} eq \&_rijndael_compat
+	and length($data) % $bs;
 
     return $result unless (length($self->{'buffer'}) >= $bs);
 
@@ -468,8 +477,18 @@ sub _null_padding ($$$) {
 
 sub _oneandzeroes_padding ($$$) {
   my ($b,$bs,$decrypt) = @_;
-  return unless length $b;
   $b = length $b ? $b : '';
+  if ($decrypt eq 'd') {
+     my $hex = unpack("H*", $b);
+     $hex =~ s/80*$//s;
+     return pack("H*", $hex);
+  }
+  return $b . pack("C*", 128, (0) x ($bs - length($b) % $bs - 1) );
+}
+
+sub _rijndael_compat ($$$) {
+  my ($b,$bs,$decrypt) = @_;
+  return unless length $b;
   if ($decrypt eq 'd') {
      my $hex = unpack("H*", $b);
      $hex =~ s/80*$//s;
@@ -628,8 +647,9 @@ The new() method creates a new Crypt::CBC object. It accepts a list of
                     'randomiv' -- Randomiv-compatible "RandomIV" header
                     'none'   -- prepend no header at all
 
-  -padding        The padding method, one of "standard", "space",
-                     "onesandzeroes", or "null". (default "standard")
+  -padding        The padding method, one of "standard" (default),
+                     "space", "oneandzeroes", "rijndael_compat",
+                     or "null" (default "standard").
 
   -literal_key    If true, the key provided by "key" is used directly
                       for encryption/decryption.  Otherwise the actual
@@ -925,7 +945,7 @@ Use the 'padding' option to change the padding method.
 
 When the last block of plaintext is shorter than the block size,
 it must be padded. Padding methods include: "standard" (i.e., PKCS#5),
-"oneandzeroes", "space", and "null".
+"oneandzeroes", "space", "rijndael_compat" and "null".
 
    standard: (default) Binary safe
       pads with the number of bytes that should be truncated. So, if 
@@ -938,14 +958,21 @@ it must be padded. Padding methods include: "standard" (i.e., PKCS#5),
       block. If the last block is a full block and blocksize is 8, a
       block of "8000000000000000" will be appended.
 
+   rijndael_compat: Binary safe, with caveats
+      similar to oneandzeroes, except that no padding is performed if
+      the last block is a full block. This is provided for
+      compatibility with Crypt::Rijndael only and can only be used
+      with messages that are a multiple of the Rijndael blocksize
+      of 16 bytes.
+
    null: text only
       pads with as many "00" necessary to fill the block. If the last 
-      block is a full block and blocksize is 8, a block of 
+      block is a full block and blocksize is 8, a block of
       "0000000000000000" will be appended.
 
    space: text only
       same as "null", but with "20".
-      
+
 Both the standard and oneandzeroes paddings are binary safe.  The
 space and null paddings are recommended only for text data.  Which
 type of padding you use depends on whether you wish to communicate

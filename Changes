@@ -1,4 +1,11 @@
 Revision history for Perl extension Crypt::CBC.
+2.25	Fri Jan 11 15:26:27 EST 2008
+	- Fixed failure of oneandzeroes padding when plaintext size is
+	an even multiple of blocksize.
+	- Added new "rijndael_compat" padding method, which is compatible
+	with the oneandzeroes padding method used by Crypt::Rijndael in
+	CBC mode.
+
 2.24	Fri Sep 28 11:21:07 EDT 2007
 	- Fixed failure to run under taint checks with Crypt::Rijndael
 	or Crypt::OpenSSL::AES (and maybe other Crypt modules). See 
