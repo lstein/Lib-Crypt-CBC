@@ -18,6 +18,8 @@ for $mod (@mods) {
 unless ($#in > -1) {
    print "1..0 # Skipped: no cryptographic modules found\n";
    exit;
+} else {
+    print "1..2\n";
 }
 
 sub test {

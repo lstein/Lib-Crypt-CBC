@@ -4,7 +4,7 @@ use Digest::MD5 'md5';
 use Carp;
 use strict;
 use vars qw($VERSION);
-$VERSION = '2.24';
+$VERSION = '2.27';
 
 use constant RANDOM_DEVICE => '/dev/urandom';
 
@@ -373,10 +373,32 @@ sub _generate_iv_and_cipher_from_options {
 
   croak "key and/or iv are missing" unless defined $self->{key} && defined $self->{civ};
 
+  $self->_taintcheck($self->{key});
   $self->{crypt} = ref $self->{cipher} ? $self->{cipher}
                                        : $self->{cipher}->new($self->{key})
 					 or croak "Could not create $self->{cipher} object: $@";
   return $result;
+}
+
+sub _taintcheck {
+    my $self = shift;
+    my $key  = shift;
+    return unless ${^TAINT};
+
+    my $has_scalar_util = eval "require Scalar::Util; 1";
+    my $tainted;
+
+    if ($has_scalar_util) {
+	$tainted = Scalar::Util::tainted($key);
+    } else {
+	local($@, $SIG{__DIE__}, $SIG{__WARN__});
+	local $^W = 0;
+	eval { kill 0 * $key };
+	$tainted = $@ =~ /^Insecure/;
+    }
+
+    croak "Taint checks are turned on and your key is tainted. Please untaint the key and try again"
+	if $tainted;
 }
 
 sub _key_from_key {

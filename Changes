@@ -1,4 +1,13 @@
 Revision history for Perl extension Crypt::CBC.
+2.27	 Fri Mar 28 10:13:32 EDT 2008
+ 	 - When taint mode is turned on and user is using a tainted key, explicitly check
+	   tainting of key in order to avoid "cryptic" failure messages from some crypt
+	   modules.
+
+2.26	Thu Mar 20 16:41:23 EDT 2008
+	- Fixed onezeropadding test, which was not reporting its test count
+	  properly.
+
 2.25	Fri Jan 11 15:26:27 EST 2008
 	- Fixed failure of oneandzeroes padding when plaintext size is
 	an even multiple of blocksize.
