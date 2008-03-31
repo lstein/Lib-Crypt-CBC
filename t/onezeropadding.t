@@ -32,11 +32,13 @@ sub test {
 $tnum = 0;
 
 eval "use Crypt::CBC";
+print STDERR "using Crypt\:\:$in[0] for testing\n";
 test(\$tnum,!$@,"Couldn't load module");
+
 
 my $cipher = Crypt::CBC->new(
 			     -key    => 'aaab',
-			     -cipher => 'Rijndael',
+			     -cipher => $in[0],
 			     -padding => "oneandzeroes",
 );
 my $string = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAX';
