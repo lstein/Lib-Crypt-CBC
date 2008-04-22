@@ -5,7 +5,7 @@ use Carp;
 use strict;
 use bytes;
 use vars qw($VERSION);
-$VERSION = '2.28';
+$VERSION = '2.29';
 
 use constant RANDOM_DEVICE => '/dev/urandom';
 

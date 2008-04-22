@@ -1,4 +1,8 @@
 Revision history for Perl extension Crypt::CBC.
+2.29	 Tue Apr 22 10:22:37 EDT 2008
+	 - Fixed errors that occurred when encrypting/decrypting utf8 strings
+	 in Perl's more recent than 5.8.8.
+
 2.28	 Mon Mar 31 10:46:25 EDT 2008
 	 - Fixed bug in onesandzeroes test that causes it to fail with Rijndael module
  	 is not installed.
