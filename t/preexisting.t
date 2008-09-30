@@ -15,7 +15,7 @@ my (@mods,$cipherclass,$i,$c,$p,$test_data);
 
 for my $mod (@mods) {
   if (eval "use Crypt::$mod(); 1") {
-    $cipherclass = "Crypt::$mod";
+    $cipherclass = $mod eq 'IDEA' ? $mod : "Crypt::$mod";
     warn "Using $cipherclass for test\n";
     last;
   }
@@ -49,7 +49,8 @@ my $bs = eval{$cipherclass->blocksize} || 8;
 my $ks = eval{$cipherclass->keysize}   || $bs;
 
 my $key    = Crypt::CBC->_get_random_bytes($ks);
-my $cipher = $cipherclass eq 'Crypt::Eksblowfish' ? $cipherclass->new(8,Crypt::CBC->_get_random_bytes(16),$key) : $cipherclass->new($key);
+my $cipher = $cipherclass eq 'Crypt::Eksblowfish' ? $cipherclass->new(8,Crypt::CBC->_get_random_bytes(16),$key) 
+            :$cipherclass->new($key);
 
 test(2,$i = Crypt::CBC->new(-cipher=>$cipher),"Couldn't create new object");
 test(3,$c = $i->encrypt($test_data),"Couldn't encrypt");
