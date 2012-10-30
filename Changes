@@ -1,4 +1,10 @@
 Revision history for Perl extension Crypt::CBC.
+2.31    Tue Oct 30 07:03:40 EDT 2012
+	- Fixes to regular expressions to avoid rare failures to
+          correctly strip padding in decoded messages.
+        - Add padding type = "none".
+        - Both fixes contributed by Bas van Sisseren.
+
 2.29	 Tue Apr 22 10:22:37 EDT 2008
 	 - Fixed errors that occurred when encrypting/decrypting utf8 strings
 	 in Perl's more recent than 5.8.8.
