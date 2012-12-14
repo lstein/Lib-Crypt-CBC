@@ -5,7 +5,7 @@ use Carp;
 use strict;
 use bytes;
 use vars qw($VERSION);
-$VERSION = '2.31';
+$VERSION = '2.32';
 
 use constant RANDOM_DEVICE => '/dev/urandom';
 
@@ -394,6 +394,7 @@ sub _taintcheck {
     my $has_scalar_util = eval "require Scalar::Util; 1";
     my $tainted;
 
+
     if ($has_scalar_util) {
 	$tainted = Scalar::Util::tainted($key);
     } else {
@@ -460,8 +461,9 @@ sub _get_random_bytes {
     $result = pack("C*",map {rand(256)} 1..$length);
   }
   # Clear taint and check length
-  length($result) == $length or croak "Invalid length while gathering $length random bytes";
-  return $result;
+  $result =~ /^(.+)$/s;
+  length($1) == $length or croak "Invalid length while gathering $length random bytes";
+  return $1;
 }
 
 sub _standard_padding ($$$) {

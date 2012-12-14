@@ -1,4 +1,7 @@
 Revision history for Perl extension Crypt::CBC.
+2.32    Fri Dec 14 14:20:17 EST 2012
+	- Fixes "Taint checks are turned on and your key is tainted" error when autogenerating salt and IV.
+
 2.31    Tue Oct 30 07:03:40 EDT 2012
 	- Fixes to regular expressions to avoid rare failures to
           correctly strip padding in decoded messages.
