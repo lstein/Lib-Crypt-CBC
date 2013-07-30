@@ -5,7 +5,7 @@ use Carp;
 use strict;
 use bytes;
 use vars qw($VERSION);
-$VERSION = '2.32';
+$VERSION = '2.33';
 
 use constant RANDOM_DEVICE => '/dev/urandom';
 
@@ -861,7 +861,7 @@ necessary to encrypt the desired data.
 
    $ciphertext = $cipher->finish();
 
-The CBC algorithm must buffer data blocks inernally until they are
+The CBC algorithm must buffer data blocks internally until they are
 even multiples of the encryption algorithm's blocksize (typically 8
 bytes).  After the last call to crypt() you should call finish().
 This flushes the internal buffer and returns any leftover ciphertext.
@@ -959,7 +959,7 @@ in OpenSSL compatibility mode.
 This gets or sets the value of the B<key> passed to new() when
 B<literal_key> is false.
 
-=head2 $data = get_random_bytes($numbytes)
+=head2 $data = random_bytes($numbytes)
 
 Return $numbytes worth of random data. On systems that support the
 "/dev/urandom" device file, this data will be read from the
