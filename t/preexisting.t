@@ -26,7 +26,7 @@ unless ($cipherclass) {
     exit;
 }
 
-print "1..33\n";
+print "1..35\n";
 
 sub test {
     local($^W) = 0;
@@ -76,3 +76,19 @@ test (32,$i->decrypt($i->encrypt($test_data)) eq $test_data);
 
 $test_data = "This string ends in some spaces  ";
 test (33,$i->decrypt($i->encrypt($test_data)) eq $test_data);
+
+# test that we can change the Digest function
+if (eval "use Digest::SHA; 1") {
+    $i = Crypt::CBC->new(-cipher     => $cipher,
+			 -digest_alg => 'SHA-256');
+    test(34,$i->decrypt($i->encrypt($test_data)) eq $test_data);
+
+    my $j = Crypt::CBC->new(-cipher => $cipher,
+			    -digest_alg => Digest->new('SHA-256'));
+    test(35,$j->decrypt($i->encrypt($test_data)) eq $test_data);
+} else {
+    print "ok 34 # skip Digest::SHA not found\n";
+    print "ok 35 # skip Digest::SHA not found\n";
+}
+
+		    

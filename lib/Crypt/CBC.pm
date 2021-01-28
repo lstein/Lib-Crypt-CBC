@@ -1,13 +1,14 @@
 package Crypt::CBC;
 
-use Digest::MD5 'md5';
 use Carp;
+use Digest;
 use strict;
 use bytes;
 use vars qw($VERSION);
-$VERSION = '2.33';
+$VERSION = '2.34';
 
-use constant RANDOM_DEVICE => '/dev/urandom';
+use constant RANDOM_DEVICE      => '/dev/urandom';
+use constant DEFAULT_DIGEST_ALG => 'MD5';
 
 sub new {
     my $class = shift;
@@ -143,6 +144,9 @@ sub new {
 	unless exists $options->{iv};
     }
 
+    # Digest algorithm
+    my $digest_alg = $options->{digest_alg} || DEFAULT_DIGEST_ALG;
+
     # KEYSIZE consistency
     if (defined $key && length($key) != $ks) {
       croak "If specified by -literal_key, then the key length must be equal to the chosen cipher's key length of $ks bytes";
@@ -167,7 +171,8 @@ sub new {
                   'literal_key' => $literal_key,
                   'pcbc'        => $pcbc,
 		  'make_random_salt' => $random_salt,
-		  'make_random_iv'   => $random_iv,
+  	          'make_random_iv'   => $random_iv,
+		  'digest_alg'       => $digest_alg,
 		  },$class;
 }
 
@@ -408,16 +413,33 @@ sub _taintcheck {
 	if $tainted;
 }
 
+sub _digest_obj {
+    my $self = shift;
+
+    if ($self->{digest_obj}) {
+	$self->{digest_obj}->reset();
+	return $self->{digest_obj};
+    }
+
+    my $alg  = $self->{digest_alg};
+    return $alg if ref $alg && $alg->can('digest');
+    my $obj  = eval {Digest->new($alg)};
+    croak "Unable to instantiate '$alg' digest object: $@" if $@;
+
+    return $self->{digest_obj} = $obj;
+}
+
 sub _key_from_key {
   my $self  = shift;
   my $pass  = shift;
   my $ks    = $self->{keysize};
 
   return $pass if $self->{literal_key};
-
-  my $material = md5($pass);
+  my $digest = $self->_digest_obj;
+      
+  my $material = $digest->reset->add($pass)->digest;
   while (length($material) < $ks)  {
-    $material .= md5($material);
+      $material .= $digest->reset->add($material)->digest;
   }
   return substr($material,0,$ks);
 }
@@ -436,9 +458,11 @@ sub _salted_key_and_iv {
   my $data  = '';
   my $d = '';
 
+  my $digest = $self->_digest_obj;
+
   while (length $data < $desired_len) {
-    $d = md5($d . $pass . $salt);
-    $data .= $d;
+      $d = $digest->reset->add($d . $pass . $salt)->digest;
+      $data .= $d;
   }
   return (substr($data,0,$key_len),substr($data,$key_len,$iv_len));
 }
@@ -674,6 +698,16 @@ The new() method creates a new Crypt::CBC object. It accepts a list of
                     true values are taken to be the literal salt.
 
   -iv             The initialization vector (IV)
+
+  -digest_alg     The digest algorithm to use when generating the password-
+                    based key. Can be any of the digests supported by the
+                    Digest module. Common examples are:
+                      'MD5'       (legacy default)
+                      'SHA-256'   (better; use for interoperability with OpenSSL)
+                      'SHA-512'
+
+                  You can also pass a Digest::* object, as in
+                      CBC::Crypt->new(-digest_alg => Digest->new('SHA-384'))
 
   -header         What type of header to prepend to ciphertext. One of
                     'salt'   -- use OpenSSL-compatible salted header
