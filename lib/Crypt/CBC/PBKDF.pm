@@ -33,16 +33,15 @@ sub list {
 
 sub generate_hash {
     my $self = shift;
-    my ($passphrase,$salt) = @_;
-    croak "generate() method not implemented in this class";
+    my ($salt,$passphrase) = @_;
+    croak "generate() method not implemented in this class. Use one of the subclasses",join(',',$self->list);
 }
 
 sub key_and_iv {
     my $self = shift;
-    croak 'usage $obj->salt_key_iv($passphrase,$salt)' unless @_ == 2;
+    croak 'usage $obj->salt_key_iv($salt,$passphrase)' unless @_ == 2;
 
-    my ($passphrase,$salt) = @_;
-    my $hash = $self->generate_hash($passphrase,$salt);
+    my $hash = $self->generate_hash(@_);
 
     my $key  = substr($hash,0,$self->{key_len});
     my $iv   = substr($hash,$self->{key_len},$self->{iv_len});

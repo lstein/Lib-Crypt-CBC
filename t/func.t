@@ -1,7 +1,7 @@
 #!/usr/local/bin/perl -Tw
 
 use strict;
-use lib '..','../blib/lib','.','./blib/lib';
+use lib './lib','./blib/lib';
 
 sub test;
 
@@ -12,6 +12,7 @@ my (@mods,@pads,@in,$pad,$test_data,$mod,$tnum,$c,$i,$p);
            Blowfish_PP
            IDEA
            DES
+           Crypt::AES
           /;
 @pads = qw/standard oneandzeroes space null/;
 

@@ -19,12 +19,12 @@ sub create {
 
 sub generate_hash {
     my $self = shift;
-    my ($passphrase,$salt) = @_;
+    my ($salt,$passphrase) = @_;
     my $desired_len = $self->{key_len} + $self->{iv_len};
     my $data  = '';
     my $d = '';
     while (length $data < $desired_len) {
-	$d     = md5($d . passphrase . $salt);
+	$d     = md5($d . $passphrase . $salt);
 	$data .= $d;
     }
     return $data;

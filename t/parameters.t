@@ -1,7 +1,7 @@
-#!/usr/bin/perl -Tw
+#!/usr/bin/perl
 
 use strict;
-use lib '..','../blib/lib','.','./blib/lib';
+use lib './lib','./blib/lib';
 
 sub test ($$$); 
 

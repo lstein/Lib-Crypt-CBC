@@ -1,6 +1,6 @@
-#!/usr/local/bin/perl -Tw
+#!/usr/local/bin/perl
 
-use lib '..','../blib/lib','.','./blib/lib';
+use lib './lib','../lib','./blib/lib';
 
 eval "use Crypt::Blowfish()";
 if ($@) {

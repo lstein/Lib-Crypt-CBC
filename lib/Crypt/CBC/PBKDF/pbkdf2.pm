@@ -22,11 +22,10 @@ sub create {
 
 sub generate_hash {
     my $self = shift;
-    my ($passphrase,$salt) = @_;
-
+    my ($salt,$passphrase) = @_;
     my $pbkdf2 = Crypt::PBKDF2->new(%$self,
 				    output_len => $self->{key_len} + $self->{iv_len});
-    return $pbkdf2->PBKDF2($passphrase,$salt);
+    return $pbkdf2->PBKDF2($salt,$passphrase);
 }
 
 1;
