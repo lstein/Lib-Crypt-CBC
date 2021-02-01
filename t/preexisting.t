@@ -5,13 +5,15 @@ use lib './lib','./blib/lib';
 
 my (@mods,$cipherclass,$i,$c,$p,$test_data);
 
-@mods = qw/Eksblowfish
-	   Rijndael
-           Blowfish
-           Blowfish_PP
-           IDEA
-           DES
-          /;
+@mods = qw/
+    Cipher::AES
+    Eksblowfish
+    Rijndael
+    Blowfish
+    Blowfish_PP
+    IDEA
+    DES
+    /;
 
 for my $mod (@mods) {
   if (eval "use Crypt::$mod(); 1") {

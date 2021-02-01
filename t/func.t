@@ -7,12 +7,13 @@ sub test;
 
 my (@mods,@pads,@in,$pad,$test_data,$mod,$tnum,$c,$i,$p);
 
-@mods = qw/Rijndael
-           Blowfish
-           Blowfish_PP
-           IDEA
-           DES
-           Crypt::AES
+@mods = qw/
+    Cipher::AES
+    Rijndael
+    Blowfish
+    Blowfish_PP
+    IDEA
+    DES
           /;
 @pads = qw/standard oneandzeroes space null/;
 

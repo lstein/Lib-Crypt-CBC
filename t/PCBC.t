@@ -1,10 +1,10 @@
-#!/usr/local/bin/perl -Tw
+#!/usr/local/bin/perl
 
 use lib './lib','./blib/lib';
 
-eval "use Crypt::DES()";
+eval "use Crypt::Cipher::AES";
 if ($@) {
-    print "1..0 # Skipped: Crypt::DES not installed\n";
+    print "1..0 # Skipped: Crypt::Cipher::AES not installed\n";
     exit;
 }
 
@@ -28,7 +28,7 @@ eval "use Crypt::CBC";
 
 test(1,!$@,"Couldn't load module");
 test(2,$i = Crypt::CBC->new(-key=>'secret',
-			    -cipher=>'DES',
+			    -cipher=>'Cipher::AES',
 			    -pcbc=>1,
 			   ),"Couldn't create new object");
 test(3,$c = $i->encrypt($test_data),"Couldn't encrypt");
