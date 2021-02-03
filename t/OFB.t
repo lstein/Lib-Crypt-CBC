@@ -1,6 +1,6 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 
-use lib './lib','./blib/lib';
+use lib './lib','./blib/lib','../lib';
 
 eval "use Crypt::Cipher::AES";
 if ($@) {
@@ -20,7 +20,7 @@ $test_data = <<END;
 Mary had a little lamb,
 Its fleece was black as coal,
 And everywere that Mary went,
-That lamb would dig a hole.
+That lamb would dig a big hole.
 END
     ;
 
@@ -29,7 +29,7 @@ eval "use Crypt::CBC";
 test(1,!$@,"Couldn't load module");
 test(2,$i = Crypt::CBC->new(-key=>'secret',
 			    -cipher=>'Cipher::AES',
-			    -chain_mode => 'pcbc'
+			    -chain_mode => 'ofb'
 			   ),"Couldn't create new object");
 test(3,$c = $i->encrypt($test_data),"Couldn't encrypt");
 test(4,$p = $i->decrypt($c),"Couldn't decrypt");

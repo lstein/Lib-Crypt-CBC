@@ -130,6 +130,14 @@ sub new {
 	        :croak "'$padding' padding not supported.  See perldoc Crypt::CBC for instructions on creating your own.";
     }
 
+    # CHAINING MODE
+    my $chain_mode =  $options->{chain_mode} ? $options->{chain_mode}
+                       : $options->{pcbc}          ? 'pcbc'
+	               : 'cbc';
+
+    croak "invalid cipher block chaining mode: $chain_mode"
+	unless $class->can("_${chain_mode}_encrypt");
+
     # KEY DERIVATION PARAMETERS
     # Some special cases here
     # 1. literal key has been requested - use algorithm 'none'
@@ -189,8 +197,8 @@ sub new {
 		  'keysize'     => $ks,
                   'header_mode' => $header_mode,
 		  'legacy_hack' => $legacy_hack,
-                  'literal_key' => $literal_key,
-                  'pcbc'        => $pcbc,
+		  'literal_key' => $literal_key,
+		  'chain_mode'  => $chain_mode,    
 		  'make_random_salt' => $random_salt,
   	          'make_random_iv'   => $random_iv,
 		  'pbkdf'       => $pbkdf,
@@ -235,6 +243,18 @@ sub start (\$$) {
     $self->{'decrypt'} = $operation=~/^d/i;
 }
 
+sub chain_mode { shift->{chain_mode} || 'cbc' }
+
+sub chaining_method {
+    my $self = shift;
+    my $decrypt = shift;
+    
+    my $cm   = $self->chain_mode;
+    my $code = $self->can($decrypt ? "_${cm}_decrypt" : "_${cm}_encrypt");
+    croak "Chain mode $cm not supported" unless $code;
+    return $code;
+}
+
 # call to encrypt/decrypt a bit of data
 sub crypt (\$$){
     my $self = shift;
@@ -258,33 +278,30 @@ sub crypt (\$$){
     my $bs = $self->{'blocksize'};
 
     croak "When using no padding, plaintext size must be a multiple of $bs"
-      if $self->{'padding'} eq \&_no_padding
+	if $self->_needs_padding
+	and $self->{'padding'} eq \&_no_padding
 	and length($data) % $bs;
 
     croak "When using rijndael_compat padding, plaintext size must be a multiple of $bs"
-      if $self->{'padding'} eq \&_rijndael_compat
+	if $self->_needs_padding
+	and $self->{'padding'} eq \&_rijndael_compat
 	and length($data) % $bs;
 
     return $result unless (length($self->{'buffer'}) >= $bs);
 
-    my @blocks = unpack("a$bs "x(int(length($self->{'buffer'})/$bs)) . "a*", $self->{'buffer'});
-    $self->{'buffer'} = '';
-
-    if ($d) {  # when decrypting, always leave a free block at the end
-      $self->{'buffer'} = length($blocks[-1]) < $bs ? join '',splice(@blocks,-2) : pop(@blocks);
+    my @blocks     = unpack("(a$bs)*",$self->{buffer});
+    $self->{buffer} = '';
+    
+    # if decrypting, leave the last block in the buffer for padding
+    if ($d) {
+	$self->{buffer} = pop @blocks;
     } else {
-      $self->{'buffer'} = pop @blocks if length($blocks[-1]) < $bs;  # what's left over
+	$self->{buffer} = pop @blocks if length $blocks[-1] < $bs;
     }
 
-    foreach my $block (@blocks) {
-      if ($d) { # decrypting
-	$result .= $iv = $iv ^ $self->{'crypt'}->decrypt($block);
-	$iv = $block unless $self->{pcbc};
-      } else { # encrypting
-	$result .= $iv = $self->{'crypt'}->encrypt($iv ^ $block);
-      }
-      $iv = $iv ^ $block if $self->{pcbc};
-    }
+    my $code = $self->chaining_method($d);
+    $self->$code($self->{crypt},\$iv,\$result,\@blocks);
+
     $self->{'civ'} = $iv;	        # remember the iv
     return $result;
 }
@@ -293,34 +310,116 @@ sub crypt (\$$){
 sub finish (\$) {
     my $self = shift;
     my $bs    = $self->{'blocksize'};
-    my $block = defined $self->{'buffer'} ? $self->{'buffer'} : '';
 
-    $self->{civ} ||= '';
+    my $block    = $self->{buffer};  # what's left
+    my $result = '';
 
-    my $result;
-    if ($self->{'decrypt'}) { #decrypting
-	$block = length $block ? pack("a$bs",$block) : ''; # pad and truncate to block size
-	
-	if (length($block)) {
-	  $result = $self->{'civ'} ^ $self->{'crypt'}->decrypt($block);
-	  $result = $self->{'padding'}->($result, $bs, 'd');
+    if (length $block > 0) {
+	$self->{civ} ||= '';
+	my $iv    = $self->{civ};
+	my $code = $self->chaining_method($self->{decrypt});
+    
+	if ($self->{decrypt}) {
+	    $block = pack("a$bs",$block)                         if $self->_needs_padding;
+	    $self->$code($self->{crypt},\$iv,\$result,[$block]);
+	    $result = $self->{padding}->($result,$bs,'d');
 	} else {
-	  $result = '';
+	    $block = $self->{padding}->($block,$bs,'e')          if $self->_needs_padding;
+	    $self->$code($self->{crypt},\$iv,\$result,[$block]);	
 	}
-
-    } else { # encrypting
-      $block  = $self->{'padding'}->($block,$bs,'e') || '';
-      $result = length $block ? $self->{'crypt'}->encrypt($self->{'civ'} ^ $block) : '';
     }
+        
     delete $self->{'civ'};
     delete $self->{'buffer'};
     return $result;
 }
 
+######################################### chaining mode methods ################################3
+sub _needs_padding {
+    shift->chain_mode =~ /^p?cbc$/;
+}
+
+sub _cbc_encrypt {
+    my $self = shift;
+    my ($crypt,$iv,$result,$blocks) = @_;
+    foreach my $plaintext (@$blocks) {
+	$$result .= $$iv = $crypt->encrypt($$iv ^ $plaintext);
+    }
+}
+
+sub _cbc_decrypt {
+    my $self = shift;
+    my ($crypt,$iv,$result,$blocks) = @_;
+    foreach my $encrypted (@$blocks) {
+	$$result .= $$iv ^ $crypt->decrypt($encrypted);
+	$$iv      = $encrypted;
+    }
+}
+
+sub _pcbc_encrypt {
+    my $self = shift;
+    my ($crypt,$iv,$result,$blocks) = @_;
+    foreach my $plaintext (@$blocks) {
+	$$result .= $$iv = $crypt->encrypt($$iv ^ $plaintext);
+	$$iv     ^= $plaintext;
+    }
+}
+
+sub _pcbc_decrypt {
+    my $self = shift;
+    my ($crypt,$iv,$result,$blocks) = @_;
+    foreach my $ciphertext (@$blocks) {
+	$$result .= $$iv = $$iv ^ $crypt->decrypt($ciphertext);
+	$$iv ^= $ciphertext;
+    }
+}
+
+sub _cfb_encrypt {
+    my $self = shift;
+    my ($crypt,$iv,$result,$blocks) = @_;
+    foreach my $plaintext (@$blocks) {
+	$$result .= $$iv = $plaintext ^ $crypt->encrypt($$iv) 
+    }
+}
+
+sub _cfb_decrypt {
+    my $self = shift;
+    my ($crypt,$iv,$result,$blocks) = @_;
+    foreach my $ciphertext (@$blocks) {
+	$$result .= $ciphertext ^ $crypt->encrypt($$iv);
+	$$iv      = $ciphertext;
+    }
+}
+
+sub _ofb_encrypt {
+    my $self = shift;
+    my ($crypt,$iv,$result,$blocks) = @_;
+
+    foreach my $plaintext (@$blocks) {
+	my $ciphertext = $plaintext ^ ($$iv = $crypt->encrypt($$iv));
+	substr($ciphertext,length $plaintext) = '';  # truncate
+	$$result .= $ciphertext;
+    }
+}
+
+sub _ofb_decrypt {
+    my $self = shift;
+    my ($crypt,$iv,$result,$blocks) = @_;
+    foreach my $ciphertext (@$blocks) {
+	my $plaintext = $ciphertext ^ ($$iv = $crypt->encrypt($$iv));
+	substr($plaintext,length $ciphertext) = '';
+	$$result .= $plaintext;
+    }
+}
+
+######################################### chaining mode methods ################################3
+
+sub pbkdf { shift->{pbkdf} }
+
 # get the initialized PBKDF object
-sub pbkdf {
+sub pbkdf_obj {
     my $self  = shift;
-    my $pbkdf = $self->{pbkdf};
+    my $pbkdf = $self->pbkdf;
     my $iter  = $self->{iter};
     my $hc    = $self->{hasher};
     return Crypt::CBC::PBKDF->new($pbkdf => 
@@ -350,7 +449,7 @@ sub _generate_iv_and_cipher_from_datastream {
 	unless exists $self->{iv};
     $self->{civ}   = $self->{iv};   # current IV equals saved IV
     $self->{pbkdf} = 'nosalt';      # already set in new(), but just in case...
-    $self->{key} ||= ($self->pbkdf->key_and_iv(undef,$self->{passphrase}))[0];
+    $self->{key} ||= ($self->pbkdf_obj->key_and_iv(undef,$self->{passphrase}))[0];
   }
 
   elsif ($header_mode eq 'salt') {
@@ -358,7 +457,7 @@ sub _generate_iv_and_cipher_from_datastream {
     croak "Ciphertext does not begin with a valid header for 'salt' header mode" unless defined $salt;
     $self->{salt} = $salt;          # new salt
     substr($$input_stream,0,16) = '';
-    my ($key,$iv) = $self->pbkdf->key_and_iv($salt,$self->{passphrase});
+    my ($key,$iv) = $self->pbkdf_obj->key_and_iv($salt,$self->{passphrase});
     $self->{iv}   = $self->{civ}  = $iv;
     $self->{key}  = $key;
   }
@@ -366,10 +465,11 @@ sub _generate_iv_and_cipher_from_datastream {
   elsif ($header_mode eq 'randomiv') {
     my ($iv) = $$input_stream =~ /^RandomIV(.{8})/s;
     croak "Ciphertext does not begin with a valid header for 'randomiv' header mode" unless defined $iv;
-    croak "randomiv header mode cannot be used securely when decrypting with a >8 byte block cipher.\nUse the -insecure_legacy_decrypt flag if you are sure you want to do this" unless $self->blocksize == 8 || $self->legacy_hack;
+    croak "randomiv header mode cannot be used securely when decrypting with a >8 byte block cipher.\nUse the -insecure_legacy_decrypt flag if you are sure you want to do this"
+	unless $self->blocksize == 8 || $self->legacy_hack;
     $self->{iv} = $self->{civ} = $iv;
     $self->{pbkdf} = 'nosalt';  # should already be set by new(), but just in case...
-    $self->{key}   = $self->pbkdf->key_and_iv(undef,$self->{passphrase});
+    $self->{key}   = $self->pbkdf_obj->key_and_iv(undef,$self->{passphrase});
     undef $self->{salt};  # paranoia
     substr($$input_stream,0,16) = ''; # truncate
   }
@@ -401,14 +501,14 @@ sub _generate_iv_and_cipher_from_options {
       unless exists $self->{iv};
     $self->{civ}   = $self->{iv};
     $self->{pbkdf} = 'nosalt';  # should already be set by new(), but just in case...
-    $self->{key} ||= ($self->pbkdf->key_and_iv(undef,$self->{passphrase}))[0];
+    $self->{key} ||= ($self->pbkdf_obj->key_and_iv(undef,$self->{passphrase}))[0];
   }
 
   elsif ($header_mode eq 'salt') {
     $self->{salt} = $self->_get_random_bytes(8) if $self->{make_random_salt};
     defined (my $salt = $self->{salt}) or croak "No header_mode of 'salt' specified, but no salt value provided"; # shouldn't happen
     length($salt) == 8 or croak "Salt must be exactly 8 bytes long";
-    my ($key,$iv) = $self->pbkdf->key_and_iv($salt,$self->{passphrase});
+    my ($key,$iv) = $self->pbkdf_obj->key_and_iv($salt,$self->{passphrase});
     $self->{key}  = $key;
     $self->{civ}  = $self->{iv} = $iv;
     $result  = "Salted__${salt}";
@@ -418,7 +518,7 @@ sub _generate_iv_and_cipher_from_options {
     croak "randomiv header mode cannot be used when encrypting with a >8 byte block cipher. There is no option to allow this"
 	unless $blocksize == 8;
     $self->{pbkdf} = 'nosalt';   # should already be set by new(), but just in case
-    $self->{key} ||= ($self->pbkdf->key_and_iv(undef,$self->{passphrase}))[0];
+    $self->{key} ||= ($self->pbkdf_obj->key_and_iv(undef,$self->{passphrase}))[0];
     $self->{iv}    = $self->_get_random_bytes(8) if $self->{make_random_iv};
     length($self->{iv}) == 8 or croak "IV must be exactly 8 bytes long when used with header mode of 'randomiv'";
     $self->{civ}   = $self->{iv};
@@ -704,6 +804,13 @@ The new() method creates a new Crypt::CBC object. It accepts a list of
                      of the classname and use the basename, e.g. "Blowfish"
                      instead of "Crypt::Blowfish".
 
+  -chaining_mode  The block chaining mode to use. Current options are:
+                     'cbc'  -- cipher-block chaining mode [default]
+                     'pcbc' -- plaintext cipher-block chaining mode
+                     'cfb'  -- cipher feedback mode 
+                     'ofb'  -- output feedback mode
+                     'ctr'  -- counter mode
+
   -pbkdf         The passphrase-based key derivation function used to derive
                     the encryption key and initialization vector from the
                     provided passphrase. For backward compatibility, Crypt::CBC
@@ -719,11 +826,11 @@ The new() method creates a new Crypt::CBC object. It accepts a list of
                                       and blocklength of the chosen cipher.
                     'nosalt'     -- Use insecure key derivation method found
                                      in prehistoric versions of OpenSSL (dangerous)
-                    'opensslv1'  -- (default) Use the salted MD5 method that was default
+                    'opensslv1'  -- [default] Use the salted MD5 method that was default
                                      in versions of OpenSSL through v1.0.2.
-                    'opensslv2'  -- (better) Use the salted SHA-256 method that was
+                    'opensslv2'  -- [better] Use the salted SHA-256 method that was
                                      the default in versions of OpenSSL through v1.1.0.
-                    'pbkdf2'     -- (best) Use the PBKDF2 method that was first
+                    'pbkdf2'     -- [best] Use the PBKDF2 method that was first
                                      introduced in OpenSSL v1.1.1.
 
                      More derivation functions may be added in the future. To see the
@@ -755,9 +862,6 @@ The new() method creates a new Crypt::CBC object. It accepts a list of
                      "space", "oneandzeroes", "rijndael_compat",
                      "null", or "none" (default "standard").
 
-  -pcbc           Whether to use the PCBC chaining algorithm rather than
-                    the standard CBC algorithm (default false).
-
   -keysize        Force the cipher keysize to the indicated number of bytes.
 
   -blocksize      Force the cipher blocksize to the indicated number of bytes.
@@ -765,6 +869,10 @@ The new() method creates a new Crypt::CBC object. It accepts a list of
   -insecure_legacy_decrypt
                   Allow decryption of data encrypted using the "RandomIV" header
                     produced by pre-2.17 versions of Crypt::CBC.
+
+  -pcbc           [deprecated, use -chaining_mode=>'pcbc']
+                    Whether to use the PCBC chaining algorithm rather than
+                    the standard CBC algorithm (default false).
 
   -literal_key    [deprected, use -pbkdf=>'none']
                       If true, the key provided by "-key" or "-pass" is used 
@@ -918,6 +1026,32 @@ The B<-padding> argument controls how the last few bytes of the
 encrypted stream are dealt with when they not an exact multiple of the
 cipher block length. The default is "standard", the method specified
 in PKCS#5.
+
+The B<-chaining_mode> argument will select among several different
+block chaining modes. Values are:
+
+  'cbc'  -- [default] traditional Cipher-Block Chaining mode. It has
+              the property that if one block in the ciphertext message
+              is damaged, only that block and the next one will be
+              rendered un-decryptable.
+
+  'pcbc' -- Plaintext Cipher-Block Chaining mode. This has the property
+              that one damaged ciphertext block will render the 
+              remainder of the message unreadable
+
+  'cfb'  -- Cipher Feedback Mode. In this mode, both encryption and decryption
+              are performed using the block cipher's "encrypt" algorithm.
+              The error propagation behaviour is similar to CBC's.
+
+  'ofb'  -- Output Feedback Mode. Similar to CFB, the block cipher's encrypt
+              algorithm is used for both encryption and decryption. If one bit
+              of the plaintext or ciphertext message is damaged, the damage is
+              confined to a single block of the corresponding ciphertext or 
+              plaintext, and error correction algorithms can be used to reconstruct
+              the damaged part.
+
+   'ctr'  -- Counter Mode....
+
 
 The B<-pcbc> argument, if true, activates a modified chaining mode
 known as PCBC. It provides better error propagation characteristics
@@ -1081,11 +1215,12 @@ Return $numbytes worth of random data. On systems that support the
 device. Otherwise, it will be generated by repeated calls to the Perl
 rand() function.
 
-=head2 cipher(), padding(), keysize(), blocksize(), pcbc()
+=head2 cipher(), pbkdf(), padding(), keysize(), blocksize(), chain_mode() 
 
 These read-only methods return the identity of the chosen block cipher
-algorithm, padding method, key and block size of the chosen block
-cipher, and whether PCBC chaining is in effect.
+algorithm, the key derivation function (e.g. "opensslv1"), padding
+method, key and block size of the chosen block cipher, and what
+chaining mode ("cbc", "ofb" ,etc) is being used.
 
 =head2 Padding methods
 

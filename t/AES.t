@@ -1,6 +1,6 @@
-#!/usr/local/bin/perl -Tw
+#!/usr/bin/perl
 
-use lib './lib','./blib/lib';
+use lib '../lib','./lib','./blib/lib';
 
 eval "use Crypt::Cipher::AES()";
 if ($@) {
@@ -27,7 +27,10 @@ END
 eval "use Crypt::CBC";
 
 test(1,!$@,"Couldn't load module");
-test(2,$i = Crypt::CBC->new('secret','Cipher::AES'),"Couldn't create new object");
+test(2,$i = Crypt::CBC->new(-pass=>'secret',
+			    -cipher => 'Cipher::AES',
+			    -pbkdf => 'pbkdf2'
+     ),"Couldn't create new object");
 test(3,$c = $i->encrypt($test_data),"Couldn't encrypt");
 test(4,$p = $i->decrypt($c),"Couldn't decrypt");
 test(5,$p eq $test_data,"Decrypted ciphertext doesn't match plaintext");
