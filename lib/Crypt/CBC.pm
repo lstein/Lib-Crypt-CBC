@@ -2,6 +2,7 @@ package Crypt::CBC;
 
 use strict;
 use Carp;
+use Math::BigInt;
 use Crypt::CBC::PBKDF;
 use bytes;
 use vars qw($VERSION);
@@ -394,7 +395,6 @@ sub _cfb_decrypt {
 sub _ofb_encrypt {
     my $self = shift;
     my ($crypt,$iv,$result,$blocks) = @_;
-
     foreach my $plaintext (@$blocks) {
 	my $ciphertext = $plaintext ^ ($$iv = $crypt->encrypt($$iv));
 	substr($ciphertext,length $plaintext) = '';  # truncate
@@ -402,14 +402,45 @@ sub _ofb_encrypt {
     }
 }
 
-sub _ofb_decrypt {
+*_ofb_decrypt = \&_ofb_encrypt;  # same code
+
+# According to RFC3686, the counter is 128 bits (16 bytes)
+# The first 32 bits (4 bytes) is the nonce
+# The next  64 bits (8 bytes) is the IV
+# The final 32 bits (4 bytes) is the counter, starting at 1
+# I think that the way openssl manages this is to take the first
+# 12 bytes of the IV, zero out the last 4 bytes, and treat
+# the whole thing as a 128 bit integer.
+sub _ctr_encrypt {
     my $self = shift;
     my ($crypt,$iv,$result,$blocks) = @_;
-    foreach my $ciphertext (@$blocks) {
-	my $plaintext = $ciphertext ^ ($$iv = $crypt->encrypt($$iv));
-	substr($plaintext,length $ciphertext) = '';
-	$$result .= $plaintext;
+
+    $self->_upgrade_iv_to_ctr($iv);
+
+    foreach my $plaintext (@$blocks) {
+	my $ciphertext = $plaintext ^ ($crypt->encrypt(($$iv++)->as_bytes));
+	substr($ciphertext,length $plaintext) = '';  # truncate
+	$$result      .= $ciphertext;
     }
+}
+
+
+*_ctr_decrypt = \&_ctr_encrypt; # same code
+
+# upgrades instance vector to a CTR counter
+# returns 1 if upgrade performed
+sub _upgrade_iv_to_ctr {
+    my $self = shift;
+    my $iv   = shift;  # this is a scalar reference
+    
+    # convert IV into a Math::BigInt object if it is not already
+    if (!ref $$iv) {  # safer to use: $$iv->isa('Math::BigInt')
+	my $v = substr($$iv,0,12) . "\000\000\000\000"; # maybe try last 12 bytes?
+	$$iv  = Math::BigInt->from_bytes($v);
+	return 1;
+    }
+
+    return;
 }
 
 ######################################### chaining mode methods ################################3
