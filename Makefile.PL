@@ -5,6 +5,7 @@ WriteMakefile(
     'NAME'	=> 'Crypt::CBC',
     'VERSION_FROM' => 'lib/Crypt/CBC.pm', # finds $VERSION
     'PREREQ_PM' => {
+	'Math::BigInt'  => 0,
 	'Digest::MD5'   => 0,
 	'Digest::SHA'   => 0,
         'Crypt::PBKDF2' => 0,
