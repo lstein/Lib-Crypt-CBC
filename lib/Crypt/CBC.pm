@@ -409,7 +409,7 @@ sub _ofb_encrypt {
 # The next  64 bits (8 bytes) is the IV
 # The final 32 bits (4 bytes) is the counter, starting at 1
 # I think that the way openssl manages this is to take the first
-# 12 bytes of the IV, zero out the last 4 bytes, and treat
+# 8 bytes of the IV, zero out the last 8 bytes, and treat
 # the whole thing as a 128 bit integer.
 sub _ctr_encrypt {
     my $self = shift;
@@ -435,8 +435,7 @@ sub _upgrade_iv_to_ctr {
     
     # convert IV into a Math::BigInt object if it is not already
     if (!ref $$iv) {  # safer to use: $$iv->isa('Math::BigInt')
-	my $v = substr($$iv,0,12) . "\000\000\000\000"; # maybe try last 12 bytes?
-	$$iv  = Math::BigInt->from_bytes($v);
+	$$iv  = Math::BigInt->from_bytes($$iv);
 	return 1;
     }
 
