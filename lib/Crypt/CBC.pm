@@ -7,7 +7,7 @@ use Crypt::CBC::PBKDF;
 use bytes;
 use vars qw($VERSION);
 no warnings 'uninitialized';
-$VERSION = '2.35';
+$VERSION = '2.36';
 
 use constant RANDOM_DEVICE      => '/dev/urandom';
 use constant DEFAULT_PBKDF      => 'opensslv1';
@@ -16,81 +16,16 @@ use constant DEFAULT_ITER       => 10_000;  # same as OpenSSL default
 sub new {
     my $class = shift;
 
-    my $options = {};
-
-    # hashref arguments
-    if (ref $_[0] eq 'HASH') {
-      $options = shift;
-    }
-
-    # CGI style arguments
-    elsif ($_[0] =~ /^-[a-zA-Z_]{1,20}$/) {
-      my %tmp = @_;
-      while ( my($key,$value) = each %tmp) {
-	$key =~ s/^-//;
-	$options->{lc $key} = $value;
-      }
-    }
-
-    else {
-	$options->{key}    = shift;
-	$options->{cipher} = shift;
-    }
-
-    my $cipher_object_provided = $options->{cipher} && ref $options->{cipher};
-
-    # "key" is a misnomer here, because it is actually usually a passphrase that is used
-    # to derive the true key
-    my $pass = $options->{pass} || $options->{key};
-
-    if ($cipher_object_provided) {
-      carp "Both a key and a pre-initialized Crypt::* object were passed. The key will be ignored"
-	if defined $pass;
-      $pass ||= '';
-    }
-    elsif (!defined $pass) {
-      croak "Please provide an encryption/decryption passphrase using -pass or -key"
-    }
-
-    # header mode
-    my %valid_modes = map {$_=>1} qw(none salt randomiv);
-    my $header_mode     = $options->{header};
-    $header_mode      ||= 'none'     if exists $options->{prepend_iv}  && !$options->{prepend_iv};
-    $header_mode      ||= 'none'     if exists $options->{add_header}  && !$options->{add_header};
-    $header_mode      ||= 'none'     if $options->{literal_key}        || (exists $options->{pbkdf} && $options->{pbkdf} eq 'none');
-    $header_mode      ||= 'salt';    # default
-    croak "Invalid -header mode '$header_mode'" unless $valid_modes{$header_mode};
-
-    croak "The -salt argument is incompatible with a -header mode of $header_mode"
-      if exists $options->{salt} && $header_mode ne 'salt';
-
-    my $cipher = $options->{cipher};
-    $cipher = 'Crypt::Cipher::AES' unless $cipher;
-    my $cipherclass = ref $cipher || $cipher;
-
-    unless (ref $cipher) {  # munge the class name if no object passed
-      $cipher = $cipher=~/^Crypt::/ ? $cipher : "Crypt::$cipher";
-      $cipher->can('encrypt') or eval "require $cipher; 1" or croak "Couldn't load $cipher: $@";
-      # some crypt modules use the class Crypt::, and others don't
-      $cipher =~ s/^Crypt::// unless $cipher->can('keysize');
-    }
-
-    # allow user to override these values
-    my $ks        = $options->{keysize};
-    my $bs        = $options->{blocksize};
-
-    # otherwise we get the values from the cipher
-    $ks ||= eval {$cipher->keysize};
-    $bs ||= eval {$cipher->blocksize};
-
-    # Some of the cipher modules are busted and don't report the
-    # keysize (well, Crypt::Blowfish in any case).  If we detect
-    # this, and find the blowfish module in use, then assume 56.
-    # Otherwise assume the least common denominator of 8.
-    $ks ||= $cipherclass =~ /blowfish/i ? 56 : 8;
-    $bs ||= $ks;
+    # the _get_*() methods move a lot of the ugliness/legacy logic
+    # out of new(). But the ugliness is still there!
+    my $options               = $class->_get_options(@_);
+    my ($cipher,$pass)        = $class->_get_cipher_obj($options);
+    my $header_mode           = $class->_get_header_mode($options);
+    my ($ks,$bs)              = $class->_get_key_and_block_sizes($cipher,$options);
+#    my ($pass,$iv,$salt,$key) = $class->_get_key_materials($options);
 
     my $pcbc = $options->{'pcbc'};
+    my $cipherclass    = ref $cipher || $cipher;
 
     # Default behavior is to treat -key as a passphrase.
     # But if the literal_key option is true, then use key as is
@@ -112,24 +47,8 @@ sub new {
 
     my $literal_key = $options->{literal_key} || (exists $options->{regenerate_key} && !$options->{regenerate_key});
     my $legacy_hack = $options->{insecure_legacy_decrypt};
-    my $padding     = $options->{padding} || 'standard';
 
-    if ($padding && ref($padding) eq 'CODE') {
-      # check to see that this code does its padding correctly
-      for my $i (1..$bs-1) {
-	my $rbs = length($padding->(" "x$i,$bs,'e'));
-	croak "padding method callback does not behave properly: expected $bs bytes back, got $rbs bytes back." 
-	  unless ($rbs == $bs);
-      }
-    } else {
-      $padding = $padding eq 'none'           ? \&_no_padding
-	        :$padding eq 'null'           ? \&_null_padding
-	        :$padding eq 'space'          ? \&_space_padding
-		:$padding eq 'oneandzeroes'   ? \&_oneandzeroes_padding
-		:$padding eq 'rijndael_compat'? \&_rijndael_compat
-                :$padding eq 'standard'       ? \&_standard_padding
-	        :croak "'$padding' padding not supported.  See perldoc Crypt::CBC for instructions on creating your own.";
-    }
+    my $padding     = $class->_get_padding_mode($bs,$options);
 
     # CHAINING MODE
     my $chain_mode =  $options->{chain_mode} ? $options->{chain_mode}
@@ -206,6 +125,19 @@ sub new {
 	          'iter'        => $iter,
 		  'hasher'      => $hc,
 		  },$class;
+}
+
+sub filehandle {
+    my $self = shift;
+    $self->_load_module('Crypt::FileHandle')
+	or croak "Optional Crypt::FileHandle module must be installed to use the filehandle() method";
+
+    if (ref $self) { # already initialized
+	return Crypt::FileHandle->new($self);
+    }
+    else { # create object
+	return Crypt::FileHandle->new($self->new(@_));
+    }
 }
 
 sub encrypt (\$$) {
@@ -335,6 +267,139 @@ sub finish (\$) {
     return $result;
 }
 
+############# Move the boring new() argument processing here #######
+sub _get_options {
+    my $class    = shift;
+    
+    my $options = {};
+    
+    # hashref arguments
+    if (ref $_[0] eq 'HASH') {
+      $options = shift;
+    }
+
+    # CGI style arguments
+    elsif ($_[0] =~ /^-[a-zA-Z_]{1,20}$/) {
+      my %tmp = @_;
+      while ( my($key,$value) = each %tmp) {
+	$key =~ s/^-//;
+	$options->{lc $key} = $value;
+      }
+    }
+
+    else {
+	$options->{key}    = shift;
+	$options->{cipher} = shift;
+    }
+    return $options;
+}
+
+sub _get_cipher_obj {
+    my $class = shift;
+    my $options = shift;
+
+    # "key" is a misnomer here, because it is actually usually a passphrase that is used
+    # to derive the true key
+    my $pass = $options->{pass} || $options->{key};
+
+    my $cipher_object_provided = $options->{cipher} && ref $options->{cipher};
+        if ($cipher_object_provided) {
+      carp "Both a key and a pre-initialized Crypt::* object were passed. The key will be ignored"
+	if defined $pass;
+      $pass ||= '';
+    }
+    elsif (!defined $pass) {
+      croak "Please provide an encryption/decryption passphrase using -pass or -key"
+    }
+
+    my $cipher = $options->{cipher};
+    $cipher = 'Crypt::Cipher::AES' unless $cipher;
+
+    unless (ref $cipher) {  # munge the class name if no object passed
+      $cipher = $cipher=~/^Crypt::/ ? $cipher : "Crypt::$cipher";
+      $cipher->can('encrypt') or eval "require $cipher; 1" or croak "Couldn't load $cipher: $@";
+      # some crypt modules use the class Crypt::, and others don't
+      $cipher =~ s/^Crypt::// unless $cipher->can('keysize');
+    }
+
+    return ($cipher,$pass);
+}
+
+sub _get_header_mode {
+    my $class = shift;
+    my $options = shift;
+
+    # header mode checking
+    my %valid_modes = map {$_=>1} qw(none salt randomiv);
+    my $header_mode     = $options->{header};
+    $header_mode      ||= 'none'     if exists $options->{prepend_iv}  && !$options->{prepend_iv};
+    $header_mode      ||= 'none'     if exists $options->{add_header}  && !$options->{add_header};
+    $header_mode      ||= 'none'     if $options->{literal_key}        || (exists $options->{pbkdf} && $options->{pbkdf} eq 'none');
+    $header_mode      ||= 'salt';    # default
+    croak "Invalid -header mode '$header_mode'" unless $valid_modes{$header_mode};
+
+    croak "The -salt argument is incompatible with a -header mode of $header_mode"
+      if exists $options->{salt} && $header_mode ne 'salt';
+
+    return $header_mode;
+}
+
+sub _get_padding_mode {
+    my $class = shift;
+    my ($bs,$options) = @_;
+
+    my $padding     = $options->{padding} || 'standard';
+
+    if ($padding && ref($padding) eq 'CODE') {
+	# check to see that this code does its padding correctly
+	for my $i (1..$bs-1) {
+	  my $rbs = length($padding->(" "x$i,$bs,'e'));
+	  croak "padding method callback does not behave properly: expected $bs bytes back, got $rbs bytes back." 
+	      unless ($rbs == $bs);
+	}
+    } else {
+	$padding = $padding eq 'none'     ? \&_no_padding
+	    :$padding eq 'null'           ? \&_null_padding
+	    :$padding eq 'space'          ? \&_space_padding
+	    :$padding eq 'oneandzeroes'   ? \&_oneandzeroes_padding
+	    :$padding eq 'rijndael_compat'? \&_rijndael_compat
+	    :$padding eq 'standard'       ? \&_standard_padding
+	    :croak "'$padding' padding not supported.  See perldoc Crypt::CBC for instructions on creating your own.";
+    }
+    return $padding;
+}
+
+sub _get_key_and_block_sizes {
+    my $class = shift;
+    my $cipher  = shift;
+    my $options = shift;
+    
+    # allow user to override these values
+    my $ks        = $options->{keysize};
+    my $bs        = $options->{blocksize};
+
+    # otherwise we get the values from the cipher
+    $ks ||= eval {$cipher->keysize};
+    $bs ||= eval {$cipher->blocksize};
+
+    # Some of the cipher modules are busted and don't report the
+    # keysize (well, Crypt::Blowfish in any case).  If we detect
+    # this, and find the blowfish module in use, then assume 56.
+    # Otherwise assume the least common denominator of 8.
+    my $cipherclass = ref $cipher || $cipher;
+    $ks ||= $cipherclass =~ /blowfish/i ? 56 : 8;
+    $bs ||= $ks;
+
+    return ($ks,$bs);
+}
+
+sub _load_module {
+    my $self   = shift;
+    my $module = shift;
+    return 1 if eval "defined \$$a\:\:VERSION";
+    return eval "use $module; 1";
+}
+
 ######################################### chaining mode methods ################################3
 sub _needs_padding {
     shift->chain_mode =~ /^p?cbc$/;
@@ -432,6 +497,9 @@ sub _ctr_encrypt {
 sub _upgrade_iv_to_ctr {
     my $self = shift;
     my $iv   = shift;  # this is a scalar reference
+
+    $self->_load_module('Math::BigInt')
+	or croak "Optional Math::BigInt module must be installed to use the CTR chaining method";
     
     # convert IV into a Math::BigInt object if it is not already
     if (!ref $$iv) {  # safer to use: $$iv->isa('Math::BigInt')
@@ -1080,13 +1148,19 @@ block chaining modes. Values are:
               plaintext, and error correction algorithms can be used to reconstruct
               the damaged part.
 
-   'ctr'  -- Counter Mode....
+   'ctr'  -- Counter Mode. This mode uses a one-time "nonce" instead of an IV. The
+              nonce is incremented by one for each block of plain or ciphertext,
+              encrypted using the chosen algorithm, and then applied to the block
+              of text. If one bit of the input text is damaged,
+              it only affects 1 bit of the output text. To use CTR mode you will
+              need to install the Perl Math::BigInt module.
 
+Passing a B<-pcbc> argument of true will have the same effect as
+-chaining_mode=>'pcbc', and is included for backward
+compatibility. [deprecated].
 
-The B<-pcbc> argument, if true, activates a modified chaining mode
-known as PCBC. It provides better error propagation characteristics
-than the default CBC encryption and is required for authenticating to
-Kerberos4 systems (see RFC 2222).
+For more information on chaining modes, see
+L<http://www.crypto-it.net/eng/theory/modes-of-block-ciphers.html>.
 
 The B<-keysize> and B<-blocksize> arguments can be used to force the
 cipher's keysize and/or blocksize. This is only currently useful for
@@ -1180,6 +1254,37 @@ hexadecimal representation.  B<encrypt_hex($plaintext)> is exactly
 equivalent to B<unpack('H*',encrypt($plaintext))>.  These functions
 can be useful if, for example, you wish to place the encrypted in an
 email message.
+
+=head2 filehandle()
+
+This method returns a filehandle for transparent encryption or
+decryption using Christopher Dunkle's excellent Crypt::FileHandle
+module. This module must be installed in order to use this method.
+
+filehandle() can be called as a class method using the same arguments
+as new():
+
+  $fh = Crypt::CBC->filehandle(-cipher=> 'Blowfish',
+                               -pass  => "You'll never guess");
+
+or on a previously-created Crypt::CBC object:
+
+   $cbc = Crypt::CBC->new(-cipher=> 'Blowfish',
+                          -pass  => "You'll never guess");
+   $fh  = $cbc->filehandle;
+
+The filehandle can then be used to open a file, pipe in the usual
+way. Input and output will encrypt or decrypt as appropriate. For example:
+
+  # transparent encryption
+  open $fh,'>','encrypted.out' or die $!;
+  print $fh "You won't be able to read me!\n";
+  close $fh;
+
+  # transparent decryption
+  open $fh,'<','encrypted.out' or die $!;
+  while (<$fh>) { print $_ }
+  close $fh;
 
 =head2 get_initialization_vector()
 
@@ -1338,11 +1443,11 @@ Please report them.
 
 Lincoln Stein, lstein@cshl.org
 
-This module is distributed under the ARTISTIC LICENSE using the same
-terms as Perl itself.
+This module is distributed under the ARTISTIC LICENSE v2 using the
+same terms as Perl itself.
 
 =head1 SEE ALSO
 
-perl(1), Crypt::DES(3), Crypt::IDEA(3), rfc2898 (PKCS#5)
+perl(1), Crypt::Cipher(3), Crypt::FileHandle, Crypt::Blowfish(3)
 
 =cut
