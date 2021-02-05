@@ -6,11 +6,10 @@ eg/idea.pl
 lib/Crypt/CBC.pm
 lib/Crypt/CBC/PBKDF.pm
 lib/Crypt/CBC/PBKDF/none.pm
-lib/Crypt/CBC/PBKDF/nosalt.pm
+lib/Crypt/CBC/PBKDF/randomiv.pm
 lib/Crypt/CBC/PBKDF/opensslv1.pm
 lib/Crypt/CBC/PBKDF/opensslv2.pm
 lib/Crypt/CBC/PBKDF/pbkdf2.pm
-lib/Crypt/CBC/PBKDF/sslv1.pm
 Makefile.PL
 MANIFEST
 META.yml			Module meta-data (added by MakeMaker)

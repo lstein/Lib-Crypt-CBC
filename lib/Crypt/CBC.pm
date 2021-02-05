@@ -24,73 +24,39 @@ sub new {
     my ($ks,$bs)              = $class->_get_key_and_block_sizes($cipher,$options);
     my ($pass,$iv,$salt,$key,
 	$random_salt,$random_iv) = $class->_get_key_materials($options);
+    my $padding                  = $class->_get_padding_mode($bs,$options);
+    my ($pbkdf,$iter,$hc)        = $class->_get_key_derivation_options($options,$header_mode);
+    my $chain_mode               = $class->_get_chain_mode($options);
 
-    # check that this works as expected
+    ### CONSISTENCY CHECKS ####
+
+    # set literal key flag if a key was passed in
     my $literal_key    = defined $key;
 
+    # check length of initialization vector
     croak "Initialization vector must be exactly $bs bytes long when using the $cipher cipher" 
 	if defined $iv and length($iv) != $bs;
 
-    my $pcbc = $options->{'pcbc'};
-    my $cipherclass    = ref $cipher || $cipher;
-
-    my $padding     = $class->_get_padding_mode($bs,$options);
-
-    # CHAINING MODE
-    my $chain_mode =  $options->{chain_mode} ? $options->{chain_mode}
-                       : $options->{pcbc}          ? 'pcbc'
-	               : 'cbc';
-
+    croak "Salt must be exactly 8 bytes long"
+	if defined $salt && length $salt != 8;
+    
+    # chaing mode check
     croak "invalid cipher block chaining mode: $chain_mode"
 	unless $class->can("_${chain_mode}_encrypt");
 
-    # KEY DERIVATION PARAMETERS
-    # Some special cases here
-    # 1. literal key has been requested - use algorithm 'none'
-    # 2. headerless mode - use algorithm 'nosalt'
-    # 3. randomiv header - use algorithm 'nosalt'
-    my $pbkdf = $options->{literal_key}     ? 'none'
-	       :$header_mode eq 'none'      ? 'nosalt'
-	       :$header_mode eq 'randomiv'  ? 'nosalt'
-               :$options->{pbkdf} || DEFAULT_PBKDF;
-
-    # iterations
-    my $iter = $options->{iterations} || DEFAULT_ITER;
-    $iter =~ /[\d_]+/ && $iter >= 1 or croak "-iterations argument must be greater than or equal to 1";
-    my $hc = $options->{hasher};
-    
-    $iter =~ /[\d_]+/ && $iter >= 1 or croak "-iterations argument must be greater than or equal to 1";
-
-    if ($options->{pbkdf} eq 'none') {
-	$literal_key = 1;
-	$header_mode = 'none';
-    }
-
     # KEYSIZE consistency
-	if (defined $key && length($key) != $ks) {
-      croak "If specified by -literal_key, then the key length must be equal to the chosen cipher's key length of $ks bytes";
+    if (defined $key && length($key) != $ks) {
+	croak "If specified by -literal_key, then the key length must be equal to the chosen cipher's key length of $ks bytes";
     }
 
-    # IV consistency
-    if (defined $iv && length($iv) != $bs) {
-      croak "If specified by -iv, then the initialization vector length must be equal to the chosen cipher's blocksize of $bs bytes";
-    }
-
-    # CONSISTENCY CHECKS
     # HEADER consistency
     if ($header_mode eq 'salt') {
-      croak "Cannot use salt-based key generation if literal key is specified"
-	if $literal_key;
-      croak "Cannot use salt-based IV generation if literal IV is specified"
-	if $iv ne '';
+	croak "Cannot use salt-based key generation if literal key is specified"
+	    if $literal_key;
     }
     elsif ($header_mode eq 'randomiv') {
-      croak "Cannot encrypt using a non-8 byte blocksize cipher when using randomiv header mode"
-	unless $bs == 8
-    }
-    elsif ($header_mode eq 'none') {
-      croak "You must provide an initialization vector using -iv when using -header=>'none'"
-	unless exists $options->{iv};
+	croak "Cannot encrypt using a non-8 byte blocksize cipher when using randomiv header mode"
+	    unless $bs == 8
     }
 
     return bless {'cipher'      => $cipher,
@@ -309,9 +275,6 @@ sub _get_header_mode {
     $header_mode      ||= 'salt';    # default
     croak "Invalid -header mode '$header_mode'" unless $valid_modes{$header_mode};
 
-    croak "The -salt argument is incompatible with a -header mode of $header_mode"
-      if exists $options->{salt} && $header_mode ne 'salt';
-
     return $header_mode;
 }
 
@@ -400,8 +363,41 @@ sub _get_key_materials {
     my $random_iv = 1 unless defined $iv;
 
     my $literal_key = $options->{literal_key} || (exists $options->{regenerate_key} && !$options->{regenerate_key});
+    undef $pass     if $literal_key;
 
     return ($pass,$iv,$salt,$key,$random_salt,$random_iv);
+}
+
+sub _get_key_derivation_options {
+    my $self    = shift;
+    my ($options,$header_mode) = @_;
+    
+    # KEY DERIVATION PARAMETERS
+    # Some special cases here
+    # 1. literal key has been requested - use algorithm 'none'
+    # 2. headerless mode - use algorithm 'none'
+    # 3. randomiv header - use algorithm 'nosalt'
+    my $pbkdf = $options->{literal_key}     ? 'none'
+	       :$header_mode eq 'randomiv'  ? 'randomiv'
+               :$options->{pbkdf} || DEFAULT_PBKDF;
+
+    # iterations
+    my $iter = $options->{iter} || DEFAULT_ITER;
+    $iter =~ /[\d_]+/ && $iter >= 1 or croak "-iterations argument must be greater than or equal to 1";
+    $iter =~ /[\d_]+/ && $iter >= 1 or croak "-iterations argument must be greater than or equal to 1";
+
+    # hasher
+    my $hc = $options->{hasher};
+    
+    return ($pbkdf,$iter,$hc);
+}
+
+sub _get_chain_mode {
+    my $self = shift;
+    my $options = shift;
+    return $options->{chain_mode} ? $options->{chain_mode}
+          :$options->{pcbc}       ? 'pcbc'
+	  :'cbc';
 }
 
 sub _load_module {
@@ -531,14 +527,68 @@ sub pbkdf_obj {
     my $pbkdf = $self->pbkdf;
     my $iter  = $self->{iter};
     my $hc    = $self->{hasher};
+    my @hash_args = $hc ? ref ($hc) ? (hasher => $hc) : (hash_class => $hc)
+	                : ();
     return Crypt::CBC::PBKDF->new($pbkdf => 
 				  {
 				      key_len    => $self->{keysize},
 				      iv_len     => $self->{blocksize},
 				      iterations => $iter,
-				      $hc ? (hasher=>$hc):()
+				      @hash_args,
 				  }
 	);
+}
+
+############################# generating key, iv and salt ########################
+# hopefully a replacement for mess below
+sub set_key_and_iv {
+    my $self = shift;
+
+    if (!$self->{literal_key}) {
+	my ($key,$iv) = $self->pbkdf_obj->key_and_iv($self->{salt},$self->{passphrase});
+	$self->{key} = $key;
+	$self->{iv}  = $iv if $self->{make_random_iv}; 
+    } else {
+	$self->{iv} = $self->_get_random_bytes($self->blocksize) if $self->{make_random_iv};
+    }
+
+    length $self->{salt} == 8                  or croak "Salt must be exactly 8 bytes long";
+    length $self->{iv}   == $self->{blocksize} or croak "IV must be exactly $self->{blocksize} bytes long";
+}
+
+# derive the salt, iv and key from the datastream header + passphrase
+sub _read_key_and_iv {
+    my $self = shift;
+    my $input_stream = shift;
+    my $bs           = $self->blocksize;
+
+    # use our header mode to figure out what to do with the data stream
+    my $header_mode = $self->header_mode;
+
+    if ($header_mode eq 'none') {
+	$self->{salt} ||= $self->_get_random_bytes(8);
+	return $self->set_key_and_iv;
+    }
+
+    elsif ($header_mode eq 'salt') {
+	($self->{salt}) = $$input_stream =~ /^Salted__(.{8})/s;
+	croak "Ciphertext does not begin with a valid header for 'salt' header mode" unless defined $self->{salt};
+	substr($$input_stream,0,16) = '';
+	($self->{key},$self->{iv}) = $self->pbkdf_obj->key_and_iv($self->{salt},$self->{passphrase});
+    }
+
+    elsif ($header_mode eq 'randomiv') {
+	($self->{iv}) = $$input_stream =~ /^RandomIV(.{8})/s;
+	croak "Ciphertext does not begin with a valid header for 'randomiv' header mode" unless defined $self->{iv};
+	croak "randomiv header mode cannot be used securely when decrypting with a >8 byte block cipher.\n"
+	    unless $self->blocksize == 8;
+	(undef,$self->{key}) = $self->pbkdf_obj->key_and_iv(undef,$self->{passphrase});
+	substr($$input_stream,0,16) = ''; # truncate
+    }
+
+    else {
+	croak "Invalid header mode '$header_mode'";
+    }
 }
 
 # this subroutine will generate the actual {en,de}cryption key, the iv
@@ -548,47 +598,12 @@ sub pbkdf_obj {
 sub _generate_iv_and_cipher_from_datastream {
   my $self         = shift;
   my $input_stream = shift;
-  my $bs           = $self->blocksize;
 
-  # use our header mode to figure out what to do with the data stream
-  my $header_mode = $self->header_mode;
-
-  if ($header_mode eq 'none') {
-    croak "You must specify a $bs byte initialization vector by passing the -iv option to new() when using -header_mode=>'none'"
-	unless exists $self->{iv};
-    $self->{civ}   = $self->{iv};   # current IV equals saved IV
-    $self->{pbkdf} = 'nosalt';      # already set in new(), but just in case...
-    $self->{key} ||= ($self->pbkdf_obj->key_and_iv(undef,$self->{passphrase}))[0];
-  }
-
-  elsif ($header_mode eq 'salt') {
-    my ($salt) = $$input_stream =~ /^Salted__(.{8})/s;
-    croak "Ciphertext does not begin with a valid header for 'salt' header mode" unless defined $salt;
-    $self->{salt} = $salt;          # new salt
-    substr($$input_stream,0,16) = '';
-    my ($key,$iv) = $self->pbkdf_obj->key_and_iv($salt,$self->{passphrase});
-    $self->{iv}   = $self->{civ}  = $iv;
-    $self->{key}  = $key;
-  }
-
-  elsif ($header_mode eq 'randomiv') {
-    my ($iv) = $$input_stream =~ /^RandomIV(.{8})/s;
-    croak "Ciphertext does not begin with a valid header for 'randomiv' header mode" unless defined $iv;
-    croak "randomiv header mode cannot be used securely when decrypting with a >8 byte block cipher.\n"
-	unless $self->blocksize == 8;
-    $self->{iv} = $self->{civ} = $iv;
-    $self->{pbkdf} = 'nosalt';  # should already be set by new(), but just in case...
-    $self->{key}   = $self->pbkdf_obj->key_and_iv(undef,$self->{passphrase});
-    undef $self->{salt};  # paranoia
-    substr($$input_stream,0,16) = ''; # truncate
-  }
-
-  else {
-    croak "Invalid header mode '$header_mode'";
-  }
-
+  $self->_read_key_and_iv($input_stream);
+  $self->{civ}   = $self->{iv};
+  
   # we should have the key and iv now, or we are dead in the water
-  croak "Cipher stream did not contain IV or salt, and you did not specify these values in new()"
+  croak "Could not derive key or iv from cipher stream, and you did not specify these values in new()"
     unless $self->{key} && $self->{civ};
 
   # now we can generate the crypt object itself
@@ -599,47 +614,30 @@ sub _generate_iv_and_cipher_from_datastream {
 }
 
 sub _generate_iv_and_cipher_from_options {
-  my $self   = shift;
-  my $blocksize = $self->blocksize;
+    my $self   = shift;
 
-  my $result = '';
-
-  my $header_mode = $self->header_mode;
-  if ($header_mode eq 'none') {
-    croak "You must specify a $blocksize byte initialization vector by passing the -iv option to new() when using -header_mode=>'none'"
-      unless exists $self->{iv};
+    $self->{salt}   = $self->_get_random_bytes(8) if $self->{make_random_salt};
+    $self->set_key_and_iv;
     $self->{civ}   = $self->{iv};
-    $self->{pbkdf} = 'nosalt';  # should already be set by new(), but just in case...
-    $self->{key} ||= ($self->pbkdf_obj->key_and_iv(undef,$self->{passphrase}))[0];
-  }
 
-  elsif ($header_mode eq 'salt') {
-    $self->{salt} = $self->_get_random_bytes(8) if $self->{make_random_salt};
-    defined (my $salt = $self->{salt}) or croak "No header_mode of 'salt' specified, but no salt value provided"; # shouldn't happen
-    length($salt) == 8 or croak "Salt must be exactly 8 bytes long";
-    my ($key,$iv) = $self->pbkdf_obj->key_and_iv($salt,$self->{passphrase});
-    $self->{key}  = $key;
-    $self->{civ}  = $self->{iv} = $iv;
-    $result  = "Salted__${salt}";
-  }
+    my $result = '';
+    my $header_mode = $self->header_mode;
+    
+    if ($header_mode eq 'salt') {
+	$result  = "Salted__$self->{salt}";
+    }
 
-  elsif ($header_mode eq 'randomiv') {
-    croak "randomiv header mode cannot be used when encrypting with a >8 byte block cipher. There is no option to allow this"
-	unless $blocksize == 8;
-    $self->{pbkdf} = 'nosalt';   # should already be set by new(), but just in case
-    $self->{key} ||= ($self->pbkdf_obj->key_and_iv(undef,$self->{passphrase}))[0];
-    $self->{iv}    = $self->_get_random_bytes(8) if $self->{make_random_iv};
-    length($self->{iv}) == 8 or croak "IV must be exactly 8 bytes long when used with header mode of 'randomiv'";
-    $self->{civ}   = $self->{iv};
-    $result = "RandomIV$self->{iv}";
-  }
+    elsif ($header_mode eq 'randomiv') {
+	$result = "RandomIV$self->{iv}";
+	undef $self->{salt}; # shouldn't be there!
+    }
 
-  croak "key and/or iv are missing" unless defined $self->{key} && defined $self->{civ};
+    croak "key and/or iv are missing" unless defined $self->{key} && defined $self->{civ};
 
-  $self->_taintcheck($self->{key});
-  $self->{crypt} = ref $self->{cipher} ? $self->{cipher}
-                                       : $self->{cipher}->new($self->{key})
-					 or croak "Could not create $self->{cipher} object: $@";
+    $self->_taintcheck($self->{key});
+    $self->{crypt} = ref $self->{cipher} ? $self->{cipher}
+                                         : $self->{cipher}->new($self->{key})
+  					   or croak "Could not create $self->{cipher} object: $@";
   return $result;
 }
 
@@ -933,7 +931,7 @@ The new() method creates a new Crypt::CBC object. It accepts a list of
                                       You must also manually specify the IV with -iv.
                                       The key and the IV must match the keylength
                                       and blocklength of the chosen cipher.
-                    'nosalt'     -- Use insecure key derivation method found
+                    'randomiv'   -- Use insecure key derivation method found
                                      in prehistoric versions of OpenSSL (dangerous)
                     'opensslv1'  -- [default] Use the salted MD5 method that was default
                                      in versions of OpenSSL through v1.0.2.

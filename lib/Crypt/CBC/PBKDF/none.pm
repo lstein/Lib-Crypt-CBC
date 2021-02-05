@@ -1,7 +1,7 @@
-package Crypt::CBC::PBKDF::opensslv2;
+package Crypt::CBC::PBKDF::none;
 use strict;
 use Carp 'croak';
-use base 'Crypt::CBC::PBKDF::none';
+use base 'Crypt::CBC::PBKDF::opensslv1';
 
 # options:
 # key_len    => 32    default
