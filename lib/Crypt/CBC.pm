@@ -13,12 +13,34 @@ use constant RANDOM_DEVICE      => '/dev/urandom';
 use constant DEFAULT_PBKDF      => 'opensslv1';
 use constant DEFAULT_ITER       => 10_000;  # same as OpenSSL default
 
+my @valid_options = qw(
+    pass
+    key
+    cipher
+    keysize
+    chain_mode
+    pbkdf
+    iter
+    hasher
+    header
+    iv
+    salt
+    padding
+    literal_key
+    pcbc
+    add_header
+    generate_key
+    prepend_iv
+    );
+
 sub new {
     my $class = shift;
 
     # the _get_*() methods move a lot of the ugliness/legacy logic
     # out of new(). But the ugliness is still there!
     my $options               = $class->_get_options(@_);
+    eval {$class->_validate_options($options)} or croak $@;
+    
     my $cipher                = $class->_get_cipher_obj($options);
     my $header_mode           = $class->_get_header_mode($options);
     my ($ks,$bs)              = $class->_get_key_and_block_sizes($cipher,$options);
@@ -30,8 +52,9 @@ sub new {
 
     ### CONSISTENCY CHECKS ####
 
-    # set literal key flag if a key was passed in
-    my $literal_key    = defined $key;
+    # set literal key flag if a key was passed in or the key derivation algorithm is none
+    $key               ||= $pass if $pbkdf eq 'none';  # just in case
+    my $literal_key      = defined $key;
 
     # check length of initialization vector
     croak "Initialization vector must be exactly $bs bytes long when using the $cipher cipher" 
@@ -41,7 +64,7 @@ sub new {
 	if defined $salt && length $salt != 8;
     
     # chaing mode check
-    croak "invalid cipher block chaining mode: $chain_mode"
+    croak "invalid cipher block chain mode: $chain_mode"
 	unless $class->can("_${chain_mode}_encrypt");
 
     # KEYSIZE consistency
@@ -58,6 +81,12 @@ sub new {
 	croak "Cannot encrypt using a non-8 byte blocksize cipher when using randomiv header mode"
 	    unless $bs == 8
     }
+
+    croak "If a key derivation function (-pbkdf) of 'none' is provided, a literal key and iv must be provided"
+	if $pbkdf eq 'none' && (!defined $key || !defined $iv);
+
+    croak "If a -header mode of 'randomiv' is provided, then the -pbkdf key derivation function must be 'randomiv' or undefined"
+	if $header_mode eq 'randomiv' and $pbkdf ne 'randomiv';
 
     return bless {'cipher'      => $cipher,
 		  'passphrase'  => $pass,
@@ -196,13 +225,12 @@ sub finish (\$) {
     my $bs    = $self->{'blocksize'};
 
     my $block    = $self->{buffer};  # what's left
-    my $result = '';
-
-    if (length $block > 0) {
-	$self->{civ} ||= '';
-	my $iv    = $self->{civ};
-	my $code = $self->chaining_method($self->{decrypt});
+    $self->{civ} ||= '';
+    my $iv    = $self->{civ};
+    my $code = $self->chaining_method($self->{decrypt});
     
+    my $result = '';
+    if (length $block > 0) {
 	if ($self->{decrypt}) {
 	    $block = pack("a$bs",$block)                         if $self->_needs_padding;
 	    $self->$code($self->{crypt},\$iv,\$result,[$block]);
@@ -212,6 +240,16 @@ sub finish (\$) {
 	    $self->$code($self->{crypt},\$iv,\$result,[$block]);	
 	}
     }
+
+    # This works around an incompatibility bug in openssl.
+    # In CBC mode, openssl adds an extraneous blocksize pad
+    # to the end of the crypt text when the plaintext is an even
+    # multiple of blocksize.
+    # Unfortunately, it's breaking other stuff!
+#    elsif ($self->chain_mode eq 'cbc' && !$self->{decrypt}) { 
+#	$block = $self->{padding}->($block,$bs,'e')              if $self->_needs_padding;
+#	$self->$code($self->{crypt},\$iv,\$result,[$block]);		
+#    }
         
     delete $self->{'civ'};
     delete $self->{'buffer'};
@@ -262,6 +300,16 @@ sub _get_cipher_obj {
     return $cipher;
 }
 
+sub _validate_options {
+    my $self    = shift;
+    my $options = shift;
+    my %valid_options = map {$_=>1} @valid_options;
+    for my $o (keys %$options) {
+	die "'$o' is not a recognized argument" unless $valid_options{$o};
+    }
+    return 1;
+}
+
 sub _get_header_mode {
     my $class = shift;
     my $options = shift;
@@ -308,21 +356,12 @@ sub _get_key_and_block_sizes {
     my $cipher  = shift;
     my $options = shift;
     
-    # allow user to override these values
-    my $ks        = $options->{keysize};
-    my $bs        = $options->{blocksize};
+    # allow user to override the keysize value
+    my $ks = $options->{keysize} || eval {$cipher->keysize} || eval {$cipher->max_keysize}
+             or croak "Cannot derive keysize from $cipher";
 
-    # otherwise we get the values from the cipher
-    $ks ||= eval {$cipher->keysize};
-    $bs ||= eval {$cipher->blocksize};
-
-    # Some of the cipher modules are busted and don't report the
-    # keysize (well, Crypt::Blowfish in any case).  If we detect
-    # this, and find the blowfish module in use, then assume 56.
-    # Otherwise assume the least common denominator of 8.
-    my $cipherclass = ref $cipher || $cipher;
-    $ks ||= $cipherclass =~ /blowfish/i ? 56 : 8;
-    $bs ||= $ks;
+    my $bs = eval {$cipher->blocksize}
+             or croak "$cipher did not provide a blocksize";
 
     return ($ks,$bs);
 }
@@ -377,10 +416,9 @@ sub _get_key_derivation_options {
     # 1. literal key has been requested - use algorithm 'none'
     # 2. headerless mode - use algorithm 'none'
     # 3. randomiv header - use algorithm 'nosalt'
-    my $pbkdf = $options->{literal_key}     ? 'none'
-	       :$header_mode eq 'randomiv'  ? 'randomiv'
-               :$options->{pbkdf} || DEFAULT_PBKDF;
-
+    my $pbkdf = $options->{pbkdf} || ($options->{literal_key}     ? 'none'
+				      :$header_mode eq 'randomiv' ? 'randomiv'
+				      :DEFAULT_PBKDF);
     # iterations
     my $iter = $options->{iter} || DEFAULT_ITER;
     $iter =~ /[\d_]+/ && $iter >= 1 or croak "-iterations argument must be greater than or equal to 1";
@@ -480,9 +518,9 @@ sub _ofb_encrypt {
 # The first 32 bits (4 bytes) is the nonce
 # The next  64 bits (8 bytes) is the IV
 # The final 32 bits (4 bytes) is the counter, starting at 1
-# I think that the way openssl manages this is to take the first
-# 8 bytes of the IV, zero out the last 8 bytes, and treat
-# the whole thing as a 128 bit integer.
+# BUT, the way that openssl v1.1.1 does it is to generate a random
+# IV, treat the whole thing as a blocksize-sized integer, and then
+# increment.
 sub _ctr_encrypt {
     my $self = shift;
     my ($crypt,$iv,$result,$blocks) = @_;
@@ -811,12 +849,18 @@ sub passphrase {
   $d;
 }
 
+sub keysize   {
+    my $self = shift;
+    $self->{keysize} = shift if @_;
+    $self->{keysize};
+}
+
 sub cipher    { shift->{cipher}    }
 sub padding   { shift->{padding}   }
-sub keysize   { shift->{keysize}   }
 sub blocksize { shift->{blocksize} }
 sub pcbc      { shift->{pcbc}      }
 sub header_mode {shift->{header_mode} }
+sub literal_key {shift->{literal_key}}
 
 1;
 __END__
@@ -911,7 +955,10 @@ The new() method creates a new Crypt::CBC object. It accepts a list of
                      of the classname and use the basename, e.g. "Blowfish"
                      instead of "Crypt::Blowfish".
 
-  -chaining_mode  The block chaining mode to use. Current options are:
+  -keysize        Force the cipher keysize to the indicated number of bytes. This can be used
+                     to set the keysize for variable keylength ciphers such as AES.
+
+  -chain_mode     The block chaining mode to use. Current options are:
                      'cbc'  -- cipher-block chaining mode [default]
                      'pcbc' -- plaintext cipher-block chaining mode
                      'cfb'  -- cipher feedback mode 
@@ -944,7 +991,7 @@ The new() method creates a new Crypt::CBC object. It accepts a list of
                      supported list, use the command 
                        perl -MCrypt::CBC::PBKDF -e 'print join "\n",Crypt::CBC::PBKDF->list'
 
-  -iterations     If the 'pbkdf2' key derivation algorithm is used, this specifies the number of
+  -iter           If the 'pbkdf2' key derivation algorithm is used, this specifies the number of
                      hashing cycles to be applied to the passphrase+salt (longer is more secure).
                      [default 10,000] 
 
@@ -969,14 +1016,6 @@ The new() method creates a new Crypt::CBC object. It accepts a list of
                      "space", "oneandzeroes", "rijndael_compat",
                      "null", or "none" (default "standard").
 
-  -keysize        Force the cipher keysize to the indicated number of bytes.
-
-  -blocksize      Force the cipher blocksize to the indicated number of bytes.
-
-  -pcbc           [deprecated, use -chaining_mode=>'pcbc']
-                    Whether to use the PCBC chaining algorithm rather than
-                    the standard CBC algorithm (default false).
-
   -literal_key    [deprected, use -pbkdf=>'none']
                       If true, the key provided by "-key" or "-pass" is used 
                       directly for encryption/decryption without salting or
@@ -984,16 +1023,19 @@ The new() method creates a new Crypt::CBC object. It accepts a list of
                       cipher. 
                       [default false)
 
+  -pcbc           [deprecated, use -chaining_mode=>'pcbc']
+                    Whether to use the PCBC chaining algorithm rather than
+                    the standard CBC algorithm (default false).
 
   -add_header     [deprecated; use -header instead]
                    Whether to add the salt and IV to the header of the output
                     cipher text.
 
-  -regenerate_key [deprecated; use literal_key instead]
+  -regenerate_key [deprecated; use -literal_key instead]
                   Whether to use a hash of the provided key to generate
                     the actual encryption key (default true)
 
-  -prepend_iv     [deprecated; use add_header instead]
+  -prepend_iv     [deprecated; use -header instead]
                   Whether to prepend the IV to the beginning of the
                     encrypted stream (default true)
 
@@ -1167,15 +1209,13 @@ compatibility. [deprecated].
 For more information on chaining modes, see
 L<http://www.crypto-it.net/eng/theory/modes-of-block-ciphers.html>.
 
-The B<-keysize> and B<-blocksize> arguments can be used to force the
-cipher's keysize and/or blocksize. This is only currently useful for
-the Crypt::Blowfish module, which accepts a variable length
-keysize. If -keysize is not specified, then Crypt::CBC will use the
-maximum length Blowfish key size of 56 bytes (448 bits). The Openssl
-library defaults to 16 byte Blowfish key sizes, so for compatibility
-with Openssl you may wish to set -keysize=>16. There are currently no
-Crypt::* modules that have variable block sizes, but an option to
-change the block size is provided just in case.
+The B<-keysize> argument can be used to force the cipher's
+keysize. This is useful for several of the newer algorithms, including
+AES, ARIA, Blowfish, and CAMELLIA. If -keysize is not specified, then
+Crypt::CBC will use the value returned by the cipher's max_keylength()
+method. Note that versions of CBC::Crypt prior to 2.36 could also
+allow you to set the blocksie, but this was never supported by any
+ciphers and has been removed.
 
 For compatibility with earlier versions of this module, you can
 provide new() with a hashref containing key/value pairs. The key names

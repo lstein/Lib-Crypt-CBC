@@ -79,7 +79,7 @@ test (32,$i->decrypt($i->encrypt($test_data)) eq $test_data);
 $test_data = "This string ends in some spaces  ";
 test (33,$i->decrypt($i->encrypt($test_data)) eq $test_data);
 
-# test that we can change the 
+# test that we can change the hasher
 if (eval "use Crypt::PBKDF2::Hash::HMACSHA1; 1") {
     my $hasher = Crypt::PBKDF2::Hash::HMACSHA1->new;
     $i = Crypt::CBC->new(-cipher     => $cipher,

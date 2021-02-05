@@ -13,12 +13,17 @@ That lamb would dig a hole.
 END
     ;
 
-print "1..77\n";
+print "1..81\n";
 
 eval "use Crypt::CBC";
 test(!$@,"Couldn't load module");
 
 my ($crypt,$ciphertext1,$ciphertext2);
+
+# test whether a bad parameter is caught
+$crypt = eval {Crypt::CBC->new(-bad_parm=>1,-pass=>'test')};
+test(!$crypt,"new() accepted an unknown parameter");
+test($@ =~ /not a recognized argument/,"bad parameter error message not emitted");
 
 $crypt = eval {Crypt::CBC->new(-cipher => 'Crypt::Crypt8',
 			       -key    => 'test key') };
@@ -121,20 +126,23 @@ test($crypt2->iv eq '76543210',"iv changed and it shouldn't have");
 my $good_key = Crypt::CBC->random_bytes(Crypt::Crypt8->keysize);
 my $bad_key  = 'foo';
 $crypt = eval {Crypt::CBC->new(-cipher => 'Crypt::Crypt8',
-			       -header => 'randomiv',
 			       -key    => $good_key,
 			       -iv     => '01234567',
-			       -literal_key => 1)};
+			       -pbkdf  => 'none'
+		   )};
 test(defined $crypt,"$@Can't continue!");
 exit 0 unless $crypt;
+test($crypt->literal_key,"pbkdf 'none' should set literal key flag, but didn't");
 test($crypt->key eq $good_key,"couldn't set literal key");
+test($crypt->header_mode eq 'none',"-pbkdf=>'none' should set header_mode to 'none', but didn't");
 test(
      !eval{
        Crypt::CBC->new(-cipher => 'Crypt::Crypt8',
 		       -header => 'randomiv',
 		       -key    => $bad_key,
 		       -iv     => '01234567',
-		       -literal_key => 1)
+		       -pbkdf  => 'none',
+	   )
        },
      "module accepted a literal key of invalid size");
 test(
@@ -143,7 +151,8 @@ test(
 		       -header => 'randomiv',
 		       -key    => $good_key,
 		       -iv     => '01234567',
-		       -literal_key => 1)
+		       -pbkdf  => 'none',
+	   )
        },
      "module accepted a literal key of invalid size");
 test(
@@ -152,7 +161,8 @@ test(
 		       -header => 'randomiv',
 		       -key    => $good_key,
 		       -iv     => '01234567891',
-		       -literal_key => 1)
+		       -pbkdf  => 'none'
+	   )
        },
      "module accepted an IV of invalid size");
 
@@ -209,9 +219,10 @@ test(
 test(
      !defined eval {Crypt::CBC->new(-cipher                  => 'Crypt::Crypt16',
 				    -header                  => 'none',
+				    -pbkdf                   => 'none',
 				    -key                     => 'a'x16)
      },
-     "module allowed initialization of header_mode 'none' without an iv");
+     "module allowed initialization of pbkdf method 'none' without an iv");
 
 test(
      !defined eval {Crypt::CBC->new(-cipher                  => 'Crypt::Crypt16',
@@ -240,19 +251,24 @@ test($crypt->pbkdf eq 'opensslv1','PBKDF should default to "opensslv1", but got 
 $crypt = eval {Crypt::CBC->new(-cipher  => 'Crypt::Crypt8',-pass=>'very secret',-pbkdf=>'pbkdf2')} or warn $@;
 test($crypt->pbkdf eq 'pbkdf2','PBKDF not setting properly. Expected "pbkdf2" but got '.$crypt->pbkdf);
 
-$crypt = eval {Crypt::CBC->new(-cipher  => 'Crypt::Crypt8',-pass=>'very secret',-pbkdf=>'pbkdf2',-hasher=>'HMACSHA3',-iter=>1000)} or warn $@;
+$crypt = eval {Crypt::CBC->new(-cipher  => 'Crypt::Crypt8',
+			       -pass=>'very secret',
+			       -pbkdf=>'pbkdf2',
+			       -hasher=>'HMACSHA3',
+			       -iter=>1000)} or warn $@;
 my $pbkdf = $crypt->pbkdf_obj;
 test(defined $pbkdf,"PBKDF object not created as expected");
 test($pbkdf->{hash_class} eq 'HMACSHA3','pbkdf object hasher not initialized to correct class');
 test($pbkdf->{iterations} == 1000,'pbkdf object hasher not initialized to correct number of iterations');
 
-$crypt = eval {Crypt::CBC->new(-cipher  => 'Crypt::Crypt8',
-			       -pass=>'very secret',
-			       -pbkdf=>'pbkdf2',
-			       -iv   => 'b'x8,
-			       -header=>'randomiv'),
-} or warn $@;
-test($crypt->pbkdf eq 'randomiv','pbkdf should be set to "randomiv" when header mode of "randomiv" used');
+test( !eval {Crypt::CBC->new(-cipher  => 'Crypt::Crypt8',
+			    -pass=>'very secret',
+			    -pbkdf=>'pbkdf2',
+			    -iv   => 'b'x8,
+			    -header=>'randomiv')
+      },
+      'module should not allow a header mode of randomiv and a pbkdf not equal to randomiv'
+    );
 
 $crypt = eval {Crypt::CBC->new(-cipher  => 'Crypt::Crypt8',
 			       -pass=>'very secret',
