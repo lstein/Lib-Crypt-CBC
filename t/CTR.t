@@ -1,10 +1,10 @@
-#!/usr/local/bin/perl -Tw
+#!/usr/bin/perl
 
-use lib './lib','./blib/lib';
+use lib './lib','./blib/lib','../lib';
 
-eval "use Crypt::Blowfish_PP()";
+eval "use Crypt::Cipher::AES";
 if ($@) {
-    print "1..0 # Skipped: Crypt::Blowfish_PP not installed\n";
+    print "1..0 # Skipped: Crypt::Cipher::AES not installed\n";
     exit;
 }
 
@@ -20,14 +20,18 @@ $test_data = <<END;
 Mary had a little lamb,
 Its fleece was black as coal,
 And everywere that Mary went,
-That lamb would dig a hole.
+That lamb would dig a big hole.
 END
     ;
 
 eval "use Crypt::CBC";
 
 test(1,!$@,"Couldn't load module");
-test(2,$i = Crypt::CBC->new('secret','Blowfish_PP'),"Couldn't create new object");
+test(2,$i = Crypt::CBC->new(-key=>'secret',
+			    -cipher        => 'Cipher::AES',
+			    -chain_mode    => 'ctr',
+			    -pbkdf         => 'opensslv2'
+			   ),"Couldn't create new object");
 test(3,$c = $i->encrypt($test_data),"Couldn't encrypt");
 test(4,$p = $i->decrypt($c),"Couldn't decrypt");
 test(5,$p eq $test_data,"Decrypted ciphertext doesn't match plaintext");
