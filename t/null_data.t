@@ -1,4 +1,4 @@
-#!/usr/bin/perl -Tw
+#!/usr/bin/perl
 
 use strict;
 use lib './lib','./blib/lib';

@@ -7,7 +7,7 @@ use Crypt::CBC::PBKDF;
 use bytes;
 use vars qw($VERSION);
 no warnings 'uninitialized';
-$VERSION = '2.36';
+$VERSION = '2.37';
 
 use constant RANDOM_DEVICE      => '/dev/urandom';
 use constant DEFAULT_PBKDF      => 'opensslv1';
@@ -152,20 +152,24 @@ sub start (\$$) {
     my $operation = shift;
     croak "Specify <e>ncryption or <d>ecryption" unless $operation=~/^[ed]/i;
 
-    $self->{'buffer'} = '';
+    $self->{'buffer'}  = '';
     $self->{'decrypt'} = $operation=~/^d/i;
 }
 
 sub chain_mode { shift->{chain_mode} || 'cbc' }
 
 sub chaining_method {
-    my $self = shift;
+    my $self    = shift;
     my $decrypt = shift;
+
+    # memoize this result
+    return $self->{chaining_method}{$decrypt} 
+           if exists $self->{chaining_method}{$decrypt};
     
     my $cm   = $self->chain_mode;
     my $code = $self->can($decrypt ? "_${cm}_decrypt" : "_${cm}_encrypt");
     croak "Chain mode $cm not supported" unless $code;
-    return $code;
+    return $self->{chaining_method}{$decrypt} = $code;
 }
 
 # call to encrypt/decrypt a bit of data
@@ -225,31 +229,26 @@ sub finish (\$) {
     my $bs    = $self->{'blocksize'};
 
     my $block    = $self->{buffer};  # what's left
+
+    # Special case hack for backward compatibility with Crypt::Rijndael's CBC_MODE.
+    if (length $block == 0 && $self->{padding} eq \&_rijndael_compat) {
+	delete $self->{'civ'};
+	delete $self->{'buffer'};
+	return '';
+    }
+	
     $self->{civ} ||= '';
     my $iv    = $self->{civ};
     my $code = $self->chaining_method($self->{decrypt});
     
     my $result = '';
-    if (length $block > 0) {
-	if ($self->{decrypt}) {
-	    $block = pack("a$bs",$block)                         if $self->_needs_padding;
-	    $self->$code($self->{crypt},\$iv,\$result,[$block]);
-	    $result = $self->{padding}->($result,$bs,'d');
-	} else {
-	    $block = $self->{padding}->($block,$bs,'e')          if $self->_needs_padding;
-	    $self->$code($self->{crypt},\$iv,\$result,[$block]);	
-	}
+    if ($self->{decrypt}) {
+	$self->$code($self->{crypt},\$iv,\$result,[$block]);
+	$result = $self->{padding}->($result,$bs,'d')        if $self->_needs_padding;
+    } else {
+	$block = $self->{padding}->($block,$bs,'e')          if $self->_needs_padding;
+	$self->$code($self->{crypt},\$iv,\$result,[$block]); 
     }
-
-    # This works around an incompatibility bug in openssl.
-    # In CBC mode, openssl adds an extraneous blocksize pad
-    # to the end of the crypt text when the plaintext is an even
-    # multiple of blocksize.
-    # Unfortunately, it's breaking other stuff!
-#    elsif ($self->chain_mode eq 'cbc' && !$self->{decrypt}) { 
-#	$block = $self->{padding}->($block,$bs,'e')              if $self->_needs_padding;
-#	$self->$code($self->{crypt},\$iv,\$result,[$block]);		
-#    }
         
     delete $self->{'civ'};
     delete $self->{'buffer'};
@@ -742,30 +741,24 @@ sub _get_random_bytes {
 
 sub _standard_padding ($$$) {
   my ($b,$bs,$decrypt) = @_;
-  $b = length $b ? $b : '';
+
   if ($decrypt eq 'd') {
     my $pad_length = unpack("C",substr($b,-1));
-
-    # sanity check for implementations that don't pad correctly
-    return $b unless $pad_length >= 0 && $pad_length <= $bs;
-    my @pad_chars = unpack("C*",substr($b,-$pad_length));
-    return $b if grep {$pad_length != $_} @pad_chars;
-
     return substr($b,0,$bs-$pad_length);
   }
-  my $pad = $bs - length($b) % $bs;
+  my $pad = $bs - length($b);
   return $b . pack("C*",($pad)x$pad);
 }
 
 sub _space_padding ($$$) {
-  my ($b,$bs,$decrypt) = @_;
-  return unless length $b;
-  $b = length $b ? $b : '';
-  if ($decrypt eq 'd') {
-     $b=~ s/ *\z//s;
-     return $b;
-  }
-  return $b . pack("C*", (32) x ($bs - length($b) % $bs));
+    my ($b,$bs,$decrypt) = @_;
+
+    if ($decrypt eq 'd') {
+	$b=~ s/ *\z//s;
+    } else {
+	$b .= pack("C*", (32) x ($bs-length($b)));
+    }
+    return $b;
 }
 
 sub _no_padding ($$$) {
@@ -786,16 +779,16 @@ sub _null_padding ($$$) {
 
 sub _oneandzeroes_padding ($$$) {
   my ($b,$bs,$decrypt) = @_;
-  $b = length $b ? $b : '';
   if ($decrypt eq 'd') {
      $b=~ s/\x80\0*\z//s;
      return $b;
   }
-  return $b . pack("C*", 128, (0) x ($bs - length($b) % $bs - 1) );
+  return $b . pack("C*", 128, (0) x ($bs - length($b) - 1) );
 }
 
 sub _rijndael_compat ($$$) {
   my ($b,$bs,$decrypt) = @_;
+
   return unless length $b;
   if ($decrypt eq 'd') {
      $b=~ s/\x80\0*\z//s;
@@ -1416,9 +1409,9 @@ it must be padded. Padding methods include: "standard" (i.e., PKCS#5),
    rijndael_compat: Binary safe, with caveats
       similar to oneandzeroes, except that no padding is performed if
       the last block is a full block. This is provided for
-      compatibility with Crypt::Rijndael only and can only be used
-      with messages that are a multiple of the Rijndael blocksize
-      of 16 bytes.
+      compatibility with Crypt::Rijndael's buit-in MODE_CBC. 
+      Note that Crypt::Rijndael's implementation of CBC only
+      works with messages that are even multiples of 16 bytes.
 
    null: text only
       pads with as many "00" necessary to fill the block. If the last 
