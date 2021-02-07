@@ -1,4 +1,8 @@
 Revision history for Perl extension Crypt::CBC.
+3.00    Sun Feb  7 10:28:08 EST 2021
+        - Released version 3.00 in recognition of multiple new features
+	  and cleanups.
+	
 2.37    Sun Feb  7 10:20:17 EST 2021
         - Added better argument checking.
 	- Fixed long-standing standard padding bug: plaintext ending with

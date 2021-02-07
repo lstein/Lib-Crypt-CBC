@@ -7,7 +7,7 @@ use Crypt::CBC::PBKDF;
 use bytes;
 use vars qw($VERSION);
 no warnings 'uninitialized';
-$VERSION = '2.37';
+$VERSION = '3.00';
 
 use constant RANDOM_DEVICE      => '/dev/urandom';
 use constant DEFAULT_PBKDF      => 'opensslv1';
