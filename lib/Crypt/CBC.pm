@@ -1,7 +1,7 @@
 package Crypt::CBC;
 
 use strict;
-use Carp;
+use Carp 'croak','carp';
 use Math::BigInt;
 use Crypt::CBC::PBKDF;
 use bytes;
@@ -20,6 +20,7 @@ my @valid_options = qw(
     keysize
     chain_mode
     pbkdf
+    nodeprecate
     iter
     hasher
     header
@@ -47,7 +48,8 @@ sub new {
     my ($pass,$iv,$salt,$key,
 	$random_salt,$random_iv) = $class->_get_key_materials($options);
     my $padding                  = $class->_get_padding_mode($bs,$options);
-    my ($pbkdf,$iter,$hc)        = $class->_get_key_derivation_options($options,$header_mode);
+    my ($pbkdf,$iter,
+	$hc,$nodeprecate)        = $class->_get_key_derivation_options($options,$header_mode);
     my $chain_mode               = $class->_get_chain_mode($options);
 
     ### CONSISTENCY CHECKS ####
@@ -81,6 +83,12 @@ sub new {
 	croak "Cannot encrypt using a non-8 byte blocksize cipher when using randomiv header mode"
 	    unless $bs == 8
     }
+
+    carp <<END if $pbkdf eq 'opensslv1' && !$nodeprecate;
+The key derivation function (-pbkdf) of "opensslv1" is now deprecated.
+Please use "opensslv2" (ok) or "pbkdf2" (better).
+Pass -nodeprecate => 1 to inhibit this message.
+END
 
     croak "If a key derivation function (-pbkdf) of 'none' is provided, a literal key and iv must be provided"
 	if $pbkdf eq 'none' && (!defined $key || !defined $iv);
@@ -425,8 +433,9 @@ sub _get_key_derivation_options {
 
     # hasher
     my $hc = $options->{hasher};
+    my $nodeprecate = $options->{nodeprecate};
     
-    return ($pbkdf,$iter,$hc);
+    return ($pbkdf,$iter,$hc,$nodeprecate);
 }
 
 sub _get_chain_mode {
