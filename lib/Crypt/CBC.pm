@@ -2,7 +2,6 @@ package Crypt::CBC;
 
 use strict;
 use Carp 'croak','carp';
-use Math::BigInt;
 use Crypt::CBC::PBKDF;
 use bytes;
 use vars qw($VERSION);
@@ -220,7 +219,9 @@ sub crypt (\$$){
     }
 
     my $code = $self->chaining_method($d);
-    $self->$code($self->{crypt},\$iv,\$result,\@blocks);
+    #    $self->$code($self->{crypt},\$iv,\$result,\@blocks);
+    # calling the code sub directly is slightly faster for some reason
+    $code->($self,$self->{crypt},\$iv,\$result,\@blocks);
 
     $self->{'civ'} = $iv;	        # remember the iv
     return $result;
@@ -443,9 +444,9 @@ sub _get_chain_mode {
 
 sub _load_module {
     my $self   = shift;
-    my $module = shift;
-    return 1 if eval "defined \$$a\:\:VERSION";
-    return eval "use $module; 1";
+    my ($module,$args) = @_;
+    return 1 if eval "\$$module\:\:VERSION";
+    return eval "use $module $args; 1";
 }
 
 sub _deprecation_warning {
@@ -469,20 +470,26 @@ sub _needs_padding {
 sub _cbc_encrypt {
     my $self = shift;
     my ($crypt,$iv,$result,$blocks) = @_;
-    my @encrypted_blocks;
-    for my $block (@$blocks) {
-	push @encrypted_blocks,
-	    ($$iv = $crypt->encrypt($$iv ^ $block));
+    # the copying looks silly, but it is slightly faster than dereferencing the
+    # variables each time
+    my ($i,$r) = ($$iv,$$result);
+    foreach (@$blocks) {
+	$r .= $i = $crypt->encrypt($i ^ $_);
     }
-    $$result .= join '',@encrypted_blocks;
+    ($$iv,$$result) = ($i,$r);
 }
 
 sub _cbc_decrypt {
     my $self = shift;
     my ($crypt,$iv,$result,$blocks) = @_;
-    my @decrypted_blocks =
-	map { my $a = $$iv ^ $crypt->decrypt($_); $$iv = $_; $a } @$blocks;
-    $$result .= join '',@decrypted_blocks;
+    # the copying looks silly, but it is slightly faster than dereferencing the
+    # variables each time
+    my ($i,$r) = ($$iv,$$result);
+    foreach (@$blocks) {
+	$r    .= $i ^ $crypt->decrypt($_);
+	$i     = $_;
+    }
+    ($$iv,$$result) = ($i,$r);
 }
 
 sub _pcbc_encrypt {
@@ -506,28 +513,34 @@ sub _pcbc_decrypt {
 sub _cfb_encrypt {
     my $self = shift;
     my ($crypt,$iv,$result,$blocks) = @_;
+    my ($i,$r) = ($$iv,$$result);
     foreach my $plaintext (@$blocks) {
-	$$result .= $$iv = $plaintext ^ $crypt->encrypt($$iv) 
+	$r .= $i = $plaintext ^ $crypt->encrypt($i) 
     }
+    ($$iv,$$result) = ($i,$r);
 }
 
 sub _cfb_decrypt {
     my $self = shift;
     my ($crypt,$iv,$result,$blocks) = @_;
+    my ($i,$r) = ($$iv,$$result);
     foreach my $ciphertext (@$blocks) {
-	$$result .= $ciphertext ^ $crypt->encrypt($$iv);
-	$$iv      = $ciphertext;
+	$r .= $ciphertext ^ $crypt->encrypt($i);
+	$i      = $ciphertext;
     }
+    ($$iv,$$result) = ($i,$r);
 }
 
 sub _ofb_encrypt {
     my $self = shift;
     my ($crypt,$iv,$result,$blocks) = @_;
+    my ($i,$r) = ($$iv,$$result);
     foreach my $plaintext (@$blocks) {
-	my $ciphertext = $plaintext ^ ($$iv = $crypt->encrypt($$iv));
+	my $ciphertext = $plaintext ^ ($i = $crypt->encrypt($i));
 	substr($ciphertext,length $plaintext) = '';  # truncate
-	$$result .= $ciphertext;
+	$r .= $ciphertext;
     }
+    ($$iv,$$result) = ($i,$r);    
 }
 
 *_ofb_decrypt = \&_ofb_encrypt;  # same code
@@ -542,14 +555,24 @@ sub _ofb_encrypt {
 sub _ctr_encrypt {
     my $self = shift;
     my ($crypt,$iv,$result,$blocks) = @_;
-
+    my $bs = $self->blocksize;
+	
     $self->_upgrade_iv_to_ctr($iv);
-
+    my ($i,$r) = ($$iv,$$result);
     foreach my $plaintext (@$blocks) {
-	my $ciphertext = $plaintext ^ ($crypt->encrypt(($$iv++)->as_bytes));
+	my $bytes = ($i++)->as_bytes;
+
+	# pad with leading nulls if there are insufficient bytes
+	# (there's gotta be a better way to do this)
+	if ($bs > length $bytes) {
+	    substr($bytes,0,0) = "\000"x($bs-length $bytes) ;
+	}
+
+	my $ciphertext = $plaintext ^ ($crypt->encrypt($bytes));
 	substr($ciphertext,length $plaintext) = '';  # truncate
-	$$result      .= $ciphertext;
+	$r      .= $ciphertext;
     }
+    ($$iv,$$result) = ($i,$r);
 }
 
 
@@ -560,10 +583,11 @@ sub _ctr_encrypt {
 sub _upgrade_iv_to_ctr {
     my $self = shift;
     my $iv   = shift;  # this is a scalar reference
+    return if ref $$iv; # already upgraded to an object
 
-    $self->_load_module('Math::BigInt')
+    $self->_load_module("Math::BigInt","try => 'GMP'")
 	or croak "Optional Math::BigInt module must be installed to use the CTR chaining method";
-    
+
     # convert IV into a Math::BigInt object if it is not already
     if (!ref $$iv) {  # safer to use: $$iv->isa('Math::BigInt')
 	$$iv  = Math::BigInt->from_bytes($$iv);
@@ -1224,7 +1248,7 @@ block chaining modes. Values are:
               of the output text. To use CTR mode you will need to
               install the Perl Math::BigInt module. I recommend
               installing Math::BigInt::GMP as well in order to avoid a
-              large performance hit.
+              large performance hit; even so, this method is slow.
 
 Passing a B<-pcbc> argument of true will have the same effect as
 -chaining_mode=>'pcbc', and is included for backward
