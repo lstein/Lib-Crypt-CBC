@@ -469,8 +469,11 @@ sub _needs_padding {
 sub _cbc_encrypt {
     my $self = shift;
     my ($crypt,$iv,$result,$blocks) = @_;
-    my @encrypted_blocks =
-	map { $$iv = $crypt->encrypt($$iv ^ $_)} @$blocks;
+    my @encrypted_blocks;
+    for my $block (@$blocks) {
+	push @encrypted_blocks,
+	    ($$iv = $crypt->encrypt($$iv ^ $block));
+    }
     $$result .= join '',@encrypted_blocks;
 }
 
