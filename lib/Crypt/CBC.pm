@@ -560,7 +560,7 @@ sub _ctr_encrypt {
     $self->_upgrade_iv_to_ctr($iv);
     my ($i,$r) = ($$iv,$$result);
     foreach my $plaintext (@$blocks) {
-	my $bytes = ($i++)->as_bytes;
+	my $bytes = int128_to_net($i++);
 
 	# pad with leading nulls if there are insufficient bytes
 	# (there's gotta be a better way to do this)
@@ -585,12 +585,12 @@ sub _upgrade_iv_to_ctr {
     my $iv   = shift;  # this is a scalar reference
     return if ref $$iv; # already upgraded to an object
 
-    $self->_load_module("Math::BigInt","try => 'GMP'")
-	or croak "Optional Math::BigInt module must be installed to use the CTR chaining method";
+    $self->_load_module("Math::Int128","'net_to_int128','int128_to_net'")
+	or croak "Optional Math::Int128 module must be installed to use the CTR chaining method";
 
-    # convert IV into a Math::BigInt object if it is not already
-    if (!ref $$iv) {  # safer to use: $$iv->isa('Math::BigInt')
-	$$iv  = Math::BigInt->from_bytes($$iv);
+    # convert IV into a Math::Int128 object if it is not already
+    if (!ref $$iv) {  # safer to use: $$iv->isa('Math::Int128')
+	$$iv  = net_to_int128($$iv);
 	return 1;
     }
 
@@ -1246,9 +1246,9 @@ block chaining modes. Values are:
               algorithm, and then applied to the block of text. If one
               bit of the input text is damaged, it only affects 1 bit
               of the output text. To use CTR mode you will need to
-              install the Perl Math::BigInt module. I recommend
-              installing Math::BigInt::GMP as well in order to avoid a
-              large performance hit; even so, this method is slow.
+              install the Perl Math::Int128 module. This chaining method
+              is roughly half the speed of the others due to integer
+              arithmetic.
 
 Passing a B<-pcbc> argument of true will have the same effect as
 -chaining_mode=>'pcbc', and is included for backward
