@@ -62,10 +62,7 @@ sub new {
     croak "Initialization vector must be exactly $bs bytes long when using the $cipher cipher" 
 	if defined $iv and length($iv) != $bs;
 
-    croak "Salt must be exactly 8 bytes long"
-	if defined $salt && length $salt != 8;
-    
-    # chaing mode check
+    # chaining mode check
     croak "invalid cipher block chain mode: $chain_mode"
 	unless $class->can("_${chain_mode}_encrypt");
 
