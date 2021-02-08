@@ -13,7 +13,7 @@ That lamb would dig a hole.
 END
     ;
 
-print "1..81\n";
+print "1..82\n";
 
 eval "use Crypt::CBC";
 test(!$@,"Couldn't load module");
@@ -322,6 +322,14 @@ $crypt = eval {Crypt::CBC->new(-cipher => 'Crypt::Crypt8',
 			       -salt   => '76543210')} or warn $@;
 $crypt->set_key_and_iv();
 test($crypt->key ne $key,"key didn't change when salt was changed");
+
+$crypt = eval {
+    Crypt::CBC->new(-cipher => 'Crypt::Crypt8',
+		    -key    => 'xyz',
+		    -header => 'salt',
+		    -salt   => 1);
+};
+test($crypt,"-salt=>1 is generating an exception: $@");
 exit 0;
 
 my $number = 1;
@@ -329,8 +337,9 @@ my $number = 1;
 sub test ($$){
     local($^W) = 0;
     my($true,$msg) = @_;
+    $msg =~ s/\n$//;
     ++$number;
-    print($true ? "ok $number\n" : "not ok $number $msg\n");
+    print($true ? "ok $number\n" : "not ok $number # $msg\n");
 }
 
 sub skip {

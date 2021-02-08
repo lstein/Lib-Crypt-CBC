@@ -62,10 +62,7 @@ sub new {
     croak "Initialization vector must be exactly $bs bytes long when using the $cipher cipher" 
 	if defined $iv and length($iv) != $bs;
 
-    croak "Salt must be exactly 8 bytes long"
-	if defined $salt && length $salt != 8;
-    
-    # chaing mode check
+    # chaining mode check
     croak "invalid cipher block chain mode: $chain_mode"
 	unless $class->can("_${chain_mode}_encrypt");
 
@@ -472,18 +469,17 @@ sub _needs_padding {
 sub _cbc_encrypt {
     my $self = shift;
     my ($crypt,$iv,$result,$blocks) = @_;
-    foreach my $plaintext (@$blocks) {
-	$$result .= $$iv = $crypt->encrypt($$iv ^ $plaintext);
-    }
+    my @encrypted_blocks =
+	map { $$iv = $crypt->encrypt($$iv ^ $_)} @$blocks;
+    $$result .= join '',@encrypted_blocks;
 }
 
 sub _cbc_decrypt {
     my $self = shift;
     my ($crypt,$iv,$result,$blocks) = @_;
-    foreach my $encrypted (@$blocks) {
-	$$result .= $$iv ^ $crypt->decrypt($encrypted);
-	$$iv      = $encrypted;
-    }
+    my @decrypted_blocks =
+	map { my $a = $$iv ^ $crypt->decrypt($_); $$iv = $_; $a } @$blocks;
+    $$result .= join '',@decrypted_blocks;
 }
 
 sub _pcbc_encrypt {
