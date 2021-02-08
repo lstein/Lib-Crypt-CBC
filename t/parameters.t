@@ -75,7 +75,9 @@ test(length($crypt->random_bytes(20)) == 20,"get_random_bytes()");
 # tests for the randomiv header
 $crypt = eval {Crypt::CBC->new(-cipher => 'Crypt::Crypt8',
 			       -key    => 'test key',
-			       -header => 'randomiv') };
+			       -header => 'randomiv',
+			       -nodeprecate=>1,
+		   ) };
 test(defined $crypt,"$@\nCan't continue!");
 exit 0 unless $crypt;
 
