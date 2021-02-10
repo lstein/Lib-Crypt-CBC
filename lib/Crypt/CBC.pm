@@ -2,7 +2,6 @@ package Crypt::CBC;
 
 use strict;
 use Carp 'croak','carp';
-use Math::BigInt;
 use Crypt::CBC::PBKDF;
 use bytes;
 use vars qw($VERSION);
@@ -443,9 +442,9 @@ sub _get_chain_mode {
 
 sub _load_module {
     my $self   = shift;
-    my $module = shift;
-    return 1 if eval "defined \$$a\:\:VERSION";
-    return eval "use $module; 1";
+    my ($module,$args) = @_;
+    return 1 if eval "\$$module\:\:VERSION";
+    return eval "use $module $args; 1;";
 }
 
 sub _deprecation_warning {
@@ -542,14 +541,22 @@ sub _ctr_encrypt {
     my ($crypt,$iv,$result,$blocks) = @_;
 
     $self->_upgrade_iv_to_ctr($iv);
+    my $bs    = $self->blocksize;
 
     foreach my $plaintext (@$blocks) {
-	my $ciphertext = $plaintext ^ ($crypt->encrypt(($$iv++)->as_bytes));
+	my $bytes = ($$iv++)->as_bytes;
+	
+	# pad with leading nulls if there are insufficient bytes
+	# (there's gotta be a better way to do this)
+	if ($bs > length $bytes) {
+	    substr($bytes,0,0) = "\000"x($bs-length $bytes) ;
+	}
+
+	my $ciphertext = $plaintext ^ ($crypt->encrypt($bytes));
 	substr($ciphertext,length $plaintext) = '';  # truncate
 	$$result      .= $ciphertext;
     }
 }
-
 
 *_ctr_decrypt = \&_ctr_encrypt; # same code
 
@@ -559,7 +566,7 @@ sub _upgrade_iv_to_ctr {
     my $self = shift;
     my $iv   = shift;  # this is a scalar reference
 
-    $self->_load_module('Math::BigInt')
+    $self->_load_module('Math::BigInt',"lib => 'GMP'")
 	or croak "Optional Math::BigInt module must be installed to use the CTR chaining method";
     
     # convert IV into a Math::BigInt object if it is not already
