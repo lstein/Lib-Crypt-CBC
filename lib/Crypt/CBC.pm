@@ -6,7 +6,7 @@ use Crypt::CBC::PBKDF;
 use bytes;
 use vars qw($VERSION);
 no warnings 'uninitialized';
-$VERSION = '3.01';
+$VERSION = '3.02';
 
 use constant RANDOM_DEVICE      => '/dev/urandom';
 use constant DEFAULT_PBKDF      => 'opensslv1';
@@ -445,9 +445,7 @@ sub _get_chain_mode {
 sub _load_module {
     my $self   = shift;
     my ($module,$args) = @_;
-    return 1 if eval "\$$module\:\:VERSION";
-    warn "use $module $args; 1;";
-    my $result = "use $module $args; 1;";
+    my $result = eval "use $module $args; 1;";
     warn $@ if $@;
     return $result;
 }
@@ -564,7 +562,7 @@ sub _ctr_encrypt {
     my ($i,$r) = ($$iv,$$result);
 
     foreach my $plaintext (@$blocks) {
-	my $bytes = Math::Int128::int128_to_net($i++);
+	my $bytes = int128_to_net($i++);
 
 	# pad with leading nulls if there are insufficient bytes
 	# (there's gotta be a better way to do this)
@@ -591,7 +589,7 @@ sub _upgrade_iv_to_ctr {
     $self->_load_module("Math::Int128" => "'net_to_int128','int128_to_net'")
 	or croak "Optional Math::Int128 module must be installed to use the CTR chaining method";
 
-    $$iv  = Math::Int128::net_to_int128($$iv);
+    $$iv  = net_to_int128($$iv);
     return 1;
 }
 
