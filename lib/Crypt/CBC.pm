@@ -446,7 +446,10 @@ sub _load_module {
     my $self   = shift;
     my ($module,$args) = @_;
     return 1 if eval "\$$module\:\:VERSION";
-    return eval "use $module $args; 1";
+    warn "use $module $args; 1;";
+    my $result = "use $module $args; 1;";
+    warn $@ if $@;
+    return $result;
 }
 
 sub _deprecation_warning {
@@ -559,8 +562,9 @@ sub _ctr_encrypt {
 	
     $self->_upgrade_iv_to_ctr($iv);
     my ($i,$r) = ($$iv,$$result);
+
     foreach my $plaintext (@$blocks) {
-	my $bytes = int128_to_net($i++);
+	my $bytes = Math::Int128::int128_to_net($i++);
 
 	# pad with leading nulls if there are insufficient bytes
 	# (there's gotta be a better way to do this)
@@ -575,7 +579,6 @@ sub _ctr_encrypt {
     ($$iv,$$result) = ($i,$r);
 }
 
-
 *_ctr_decrypt = \&_ctr_encrypt; # same code
 
 # upgrades instance vector to a CTR counter
@@ -585,16 +588,11 @@ sub _upgrade_iv_to_ctr {
     my $iv   = shift;  # this is a scalar reference
     return if ref $$iv; # already upgraded to an object
 
-    $self->_load_module("Math::Int128","'net_to_int128','int128_to_net'")
+    $self->_load_module("Math::Int128" => "'net_to_int128','int128_to_net'")
 	or croak "Optional Math::Int128 module must be installed to use the CTR chaining method";
 
-    # convert IV into a Math::Int128 object if it is not already
-    if (!ref $$iv) {  # safer to use: $$iv->isa('Math::Int128')
-	$$iv  = net_to_int128($$iv);
-	return 1;
-    }
-
-    return;
+    $$iv  = Math::Int128::net_to_int128($$iv);
+    return 1;
 }
 
 ######################################### chaining mode methods ################################3

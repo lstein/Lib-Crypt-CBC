@@ -8,6 +8,12 @@ if ($@) {
     exit;
 }
 
+eval "use Math::Int128";
+if ($@) {
+    print "1..0 # Skipped: Math::Int128 not installed\n";
+    exit;
+}
+
 print "1..33\n";
 
 sub test {

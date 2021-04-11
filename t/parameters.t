@@ -322,7 +322,6 @@ $crypt = eval {Crypt::CBC->new(-cipher => 'Crypt::Crypt8',
 			       -salt   => '76543210')} or warn $@;
 $crypt->set_key_and_iv();
 test($crypt->key ne $key,"key didn't change when salt was changed");
-
 $crypt = eval {
     Crypt::CBC->new(-cipher => 'Crypt::Crypt8',
 		    -key    => 'xyz',
@@ -330,6 +329,7 @@ $crypt = eval {
 		    -salt   => 1);
 };
 test($crypt,"-salt=>1 is generating an exception: $@");
+
 exit 0;
 
 my $number = 1;
