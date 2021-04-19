@@ -251,7 +251,7 @@ sub finish (\$) {
 	$result = $self->{padding}->($result,$bs,'d')        if $self->_needs_padding;
     } else {
 	$block = $self->{padding}->($block,$bs,'e')          if $self->_needs_padding;
-	$self->$code($self->{crypt},\$iv,\$result,[$block]); 
+	$self->$code($self->{crypt},\$iv,\$result,[$block])  unless length $block==0 && !$self->_needs_padding
     }
         
     delete $self->{'civ'};
@@ -465,7 +465,8 @@ END
 
 ######################################### chaining mode methods ################################3
 sub _needs_padding {
-    shift->chain_mode =~ /^p?cbc$/;
+    my $self = shift;
+    $self->chain_mode =~ /^p?cbc$/ && $self->padding ne \&_no_padding;
 }
 
 sub _cbc_encrypt {
