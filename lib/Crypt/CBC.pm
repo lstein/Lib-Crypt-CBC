@@ -72,11 +72,11 @@ sub new {
 
     # HEADER consistency
     if ($header_mode eq 'salt') {
-	croak "Cannot use salt-based key generation if literal key is specified"
+	croak "Cannot use -header mode of 'salt' if a literal key is specified or key derivation function is none"
 	    if $literal_key;
     }
     elsif ($header_mode eq 'randomiv') {
-	croak "Cannot encrypt using a non-8 byte blocksize cipher when using randomiv header mode"
+	croak "Cannot use -header mode of 'randomiv' in conjunction with a cipher whose blocksize greater than 8"
 	    unless $bs == 8
     }
 
@@ -618,16 +618,15 @@ sub pbkdf_obj {
 }
 
 ############################# generating key, iv and salt ########################
-# hopefully a replacement for mess below
 sub set_key_and_iv {
     my $self = shift;
 
-    if (!$self->{literal_key}) {
+    if ($self->pbkdf eq 'none' || $self->{literal_key}) {
+	$self->{iv} = $self->_get_random_bytes($self->blocksize) if $self->{make_random_iv};
+    } else {
 	my ($key,$iv) = $self->pbkdf_obj->key_and_iv($self->{salt},$self->{passphrase});
 	$self->{key} = $key;
 	$self->{iv}  = $iv if $self->{make_random_iv}; 
-    } else {
-	$self->{iv} = $self->_get_random_bytes($self->blocksize) if $self->{make_random_iv};
     }
 
     length $self->{salt} == 8                  or croak "Salt must be exactly 8 bytes long";
@@ -929,6 +928,7 @@ Crypt::CBC - Encrypt Data with Cipher Block Chaining Mode
   $key    = Crypt::CBC->random_bytes(8);  # assuming a 8-byte block cipher
   $iv     = Crypt::CBC->random_bytes(8);
   $cipher = Crypt::CBC->new(-pbkdf       => 'none',
+                            -header      => 'none',
                             -key         => $key,
                             -iv          => $iv);
 

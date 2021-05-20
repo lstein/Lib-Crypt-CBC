@@ -1,4 +1,7 @@
 Revision history for Perl extension Crypt::CBC.
+3.05	 Thu 20 May 2021 12:00:18 PM EDT
+	 - Fixed bug involving manually-specified key not being used in some circumstances.
+	 
 3.04	 Mon 17 May 2021 10:58:37 AM EDT
         - Fixed bug involving manually-specified IV not being used in some circumstances.
 	
