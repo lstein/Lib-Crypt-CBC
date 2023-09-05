@@ -661,7 +661,7 @@ sub _read_key_and_iv {
 	croak "Ciphertext does not begin with a valid header for 'randomiv' header mode" unless defined $self->{iv};
 	croak "randomiv header mode cannot be used securely when decrypting with a >8 byte block cipher.\n"
 	    unless $self->blocksize == 8;
-	(undef,$self->{key}) = $self->pbkdf_obj->key_and_iv(undef,$self->{passphrase});
+	($self->{key},undef) = $self->pbkdf_obj->key_and_iv(undef,$self->{passphrase});
 	substr($$input_stream,0,16) = ''; # truncate
     }
 
